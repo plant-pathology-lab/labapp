@@ -1,0 +1,23 @@
+# segreti: stanno solo nei Secrets di Supabase e sul computer
+CHIAVI-NOTIFICHE.txt
+supabase/promemoria.sql
+.env
+.env.*
+*.pem
+
+# dati del laboratorio: si lanciano dal computer, non vanno nel repository pubblico
+*.csv
+supabase/*_iniziali.sql
+supabase/micoteca_iniziale.sql
+supabase/endofiti_grano.sql
+supabase/dati_dalle_foto.sql
+supabase/articoli_laboratorio.sql
+supabase/schede_sicurezza.sql
+supabase/standard_lcms.sql
+supabase/caffe_lavagna.sql
+
+# file di sistema e video
+.DS_Store
+Thumbs.db
+*.mp4
+node_modules/

@@ -1,0 +1,65 @@
+{
+  "name": "Plant Pathology Lab · Sapienza",
+  "short_name": "Plant Lab",
+  "description": "Plant Pathology Laboratory, Sapienza Università di Roma. Inventario, prenotazioni, micoteca, protocolli e diario del laboratorio",
+  "lang": "it",
+  "id": "./",
+  "start_url": "./#inventario",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1e5b4d",
+  "theme_color": "#1e5b4d",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Prenota",
+      "url": "./#prenota",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Da riordinare",
+      "url": "./#riordino",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Protocolli",
+      "url": "./#protocolli",
+      "icons": [
+        {
+          "src": "icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}
