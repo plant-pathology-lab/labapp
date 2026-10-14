@@ -2255,7 +2255,7 @@ function viewAltro() {
     ${DEMO ? `<div class="banner warn" style="margin-top:8px">${icon('alert')}<div>${DEMO_PREVIEW ? 'Anteprima con i dati veri del laboratorio: inventario, protocolli, strumenti, ceppi e articoli. Le modifiche restano su questo dispositivo, le notifiche e l\'installazione funzionano nell\'app vera.' : 'Modalità prova. I dati restano su questo telefono e le notifiche non partono.'}</div></div>` : ''}
     <div class="card menu" style="margin-top:8px">
       <button type="button" class="menu-row" data-act="profile"><span class="avatar">${esc((me.full_name || '?').slice(0, 1).toUpperCase())}</span>
-        <div class="grow"><div><b>${esc(me.full_name)}</b></div><div class="sub">${esc(me.email || '')} · ${roleLabel[me.role]}</div></div>${icon('chev', 'chev')}</button>
+        <div class="grow"><div><b>${esc(me.full_name)}</b></div><div class="sub">${esc(me.email || '')} · ${roleLabel[me.role]}${isDev() ? ' e sviluppatore' : ''}</div></div>${icon('chev', 'chev')}</button>
       ${row('settings', 'sliders', 'Personalizza', 'Preferiti, riquadri, aspetto')}</div>
     ${onbHtml}
     <div class="section-title">Questo telefono</div>
@@ -15373,7 +15373,7 @@ addEventListener('appinstalled', () => { S.installEvt = null; if (S.uid) { rende
 // ===========================================================================
 //  Avvio
 // ===========================================================================
-const APP_BUILD = '2026-10-14e';
+const APP_BUILD = '2026-10-14f';
 function updateReady() {
   if (S.updateReady) return;
   S.updateReady = true;

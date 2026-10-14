@@ -1,6 +1,6 @@
 // Service worker: funzionamento offline dell'interfaccia e notifiche push.
 // Quando aggiorni i file dell'app cambia VERSION per forzare l'aggiornamento sui telefoni.
-const VERSION = 'labapp-v57';
+const VERSION = 'labapp-v58';
 const SHELL = ['./', './index.html', './styles.css', './app.js', './api.js', './spiegazioni.js', './funghi.js', './config.js', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/badge-96.png', './icons/emblema.svg'];
 
