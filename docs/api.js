@@ -558,6 +558,12 @@ class SupabaseApi {
     const rows = unwrap(await this.sb.from('journal_shares').delete().eq('id', id).select());
     if (!rows.length) throw new Error('La toglie chi l\'ha mandata o chi l\'ha ricevuta');
   }
+  // giro 54: lo sviluppatore apre il diario di qualcuno quando va recuperato; chi lo scrive lo vede
+  async forceDiaryAccess(target, reason) {
+    const id = unwrap(await this.sb.rpc('force_diary_access', { target, reason }));
+    this.notify().catch(() => {});
+    return id;
+  }
 
   // ---- copie di sicurezza (solo amministratori)
   async backups() {
@@ -974,7 +980,7 @@ function demoSeed() {
   const iso = (ms) => new Date(ms).toISOString();
   const ago = (d) => iso(now - d * 24 * h);
   const G = globalThis;
-  const profiles = [{ id: 'u-tu', full_name: 'Tu', email: 'tu@prova.it', role: 'admin', created_at: ago(30) }];
+  const profiles = [{ id: 'u-tu', full_name: 'Tu', email: 'tu@prova.it', role: 'admin', developer: true, created_at: ago(30) }];
   const base = { unit: 'pz', min_quantity: null, location: null, supplier: null, catalog_no: null, lot: null, expiry: null, notes: null, status: 'ok', flag_reason: null, flag_note: null, flagged_by: null, flagged_at: null,
     ordered_by: null, ordered_at: null, created_by: 'u-tu', created_at: ago(20), updated_by: 'u-tu', updated_at: ago(9) };
   // la riga generica delle Flongle è superata dalla sezione Sequenziamento, una scheda per ogni flow cell
@@ -1041,6 +1047,8 @@ class DemoApi {
     this.db = saved || demoSeed();
     const KEYS = ['practicals', 'protocol_runs', 'journal', 'journal_versions', 'projects', 'shares', 'tasks', 'task_log', 'issues', 'comments', 'item_log', 'photos', 'cylinders', 'flowcells', 'fc_checks', 'item_codes', 'protocols', 'requests', 'waste', 'strains', 'strain_events', 'strain_photos', 'stocks', 'freezers', 'boxes', 'slots', 'inst_log', 'columns', 'chamber_slots', 'coffee', 'coffee_reviews', 'coffee_hidden', 'students', 'lab_authors', 'funds', 'fund_managers', 'fund_expenses'];
     if (KEYS.some((k) => !this.db[k])) { const fresh = demoSeed(); for (const k of KEYS) if (!this.db[k]) this.db[k] = fresh[k]; }
+    // giro 54: nella prova lo sviluppatore è chi la usa, anche nelle prove salvate prima
+    if (!this.db.profiles.some((p) => p.developer)) { const me = this.db.profiles.find((p) => p.id === this.uid); if (me) me.developer = true; }
     this.persist();
   }
 
@@ -1502,8 +1510,9 @@ class DemoApi {
     const me = this.db.profiles.find((x) => x.id === this.uid);
     const sh = (this.db.shares || []).filter((x) => x.viewer_id === this.uid && x.owner_id === userId);
     const seen = (e) => sh.some((x) => (!x.project_id || x.project_id === e.project_id) && (!x.from_day || e.day >= x.from_day) && (!x.to_day || e.day <= x.to_day) && (!x.entry_ids || x.entry_ids.includes(e.id)));
-    if (userId !== this.uid && me?.role !== 'admin' && !sh.length) return [];
-    return clone(this.db.journal.filter((e) => e.user_id === userId && (userId === this.uid || me?.role === 'admin' || seen(e)))
+    // giro 54: il diario lo leggono solo chi lo scrive e chi lo riceve
+    if (userId !== this.uid && !sh.length) return [];
+    return clone(this.db.journal.filter((e) => e.user_id === userId && (userId === this.uid || seen(e)))
       .sort((a, b) => b.day.localeCompare(a.day) || b.created_at.localeCompare(a.created_at)).slice(0, limit));
   }
 
@@ -1572,7 +1581,7 @@ class DemoApi {
     if (f.from_day && f.to_day && f.from_day > f.to_day) throw new Error('Il periodo va dal giorno prima al giorno dopo');
     if (x.id) {
       const old = (this.db.shares || []).find((y) => y.id === x.id);
-      if (!old || old.owner_id !== this.uid) throw new Error('La cambia solo chi l\'ha mandata');
+      if (!old || old.owner_id !== this.uid || old.forced) throw new Error('La cambia solo chi l\'ha mandata');
       Object.assign(old, f); this.persist(); return clone(old);
     }
     if (x.viewer_id === this.uid) throw new Error('Non serve mandarlo a te');
@@ -1581,8 +1590,19 @@ class DemoApi {
   }
   async deleteShare(id) {
     const old = (this.db.shares || []).find((y) => y.id === id);
-    if (!old || (old.owner_id !== this.uid && old.viewer_id !== this.uid)) throw new Error('La toglie chi l\'ha mandata o chi l\'ha ricevuta');
+    if (!old || ((old.owner_id !== this.uid || old.forced) && old.viewer_id !== this.uid)) throw new Error('La toglie chi l\'ha mandata o chi l\'ha ricevuta');
     this.db.shares = this.db.shares.filter((y) => y.id !== id); this.persist();
+  }
+  async forceDiaryAccess(target, reason) {
+    const me = this.db.profiles.find((x) => x.id === this.uid);
+    if (!me?.developer || me.role !== 'admin') throw new Error('L\'accesso d\'emergenza ai diari ce l\'ha solo lo sviluppatore dell\'app');
+    const why = String(reason || '').trim().slice(0, 500);
+    if (target === this.uid) throw new Error('È il tuo diario');
+    if (why.length < 5) throw new Error('Scrivi il motivo');
+    const old = (this.db.shares ||= []).find((y) => y.owner_id === target && y.viewer_id === this.uid && y.forced);
+    if (old) { Object.assign(old, { note: why, created_at: new Date().toISOString() }); this.persist(); return old.id; }
+    const row = { id: uuid(), owner_id: target, viewer_id: this.uid, project_id: null, from_day: null, to_day: null, entry_ids: null, include_runs: true, note: why, forced: true, created_at: new Date().toISOString(), notified_at: null };
+    this.db.shares.push(row); this.persist(); return row.id;
   }
   // copie di sicurezza: nell'anteprima restano in memoria
   demoSnapshot() {
@@ -2169,15 +2189,22 @@ class DemoApi {
   }
 
   async setRole(id, role) {
+    const me = this.db.profiles.find((x) => x.id === this.uid);
+    if (!me?.developer || me.role !== 'admin') throw new Error('Gli accessi li gestisce solo lo sviluppatore dell\'app');
+    if (id === this.uid && role !== 'admin') throw new Error('Lo sviluppatore resta amministratore');
     const p = this.db.profiles.find((x) => x.id === id);
     if (role !== 'admin' && p.role === 'admin' && this.db.profiles.filter((x) => x.role === 'admin').length === 1) {
       throw new Error('Serve almeno un amministratore');
     }
+    // giro 54: chi torna "in attesa" ha lasciato il laboratorio, i suoi dati restano
+    p.left_at = role !== 'pending' ? null : p.role !== 'pending' ? new Date().toISOString() : p.left_at || null;
     p.role = role;
     this.persist();
   }
 
   async removeMember(id) {
+    const me = this.db.profiles.find((x) => x.id === this.uid);
+    if (!me?.developer || me.role !== 'admin') throw new Error('Gli accessi li gestisce solo lo sviluppatore dell\'app');
     if (id === this.uid) throw new Error('Non puoi rimuovere te stesso');
     this.db.profiles = this.db.profiles.filter((x) => x.id !== id);
     this.persist();

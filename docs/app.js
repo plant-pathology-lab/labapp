@@ -324,6 +324,14 @@ const root = $('#app');
 const person = (id) => S.profiles.find((p) => p.id === id);
 const nameOf = (id) => (id === S.uid ? 'te' : person(id)?.full_name || 'qualcuno');
 const isAdmin = () => S.me?.role === 'admin';
+// giro 54: lo sviluppatore dell'app (il primo che si è registrato) gestisce gli accessi e le copie di sicurezza
+const isDev = () => isAdmin() && !!S.me?.developer;
+const devName = () => S.profiles.find((p) => p.developer)?.full_name || 'lo sviluppatore';
+// chi chiede di entrare: in attesa e mai uscito. Chi ha lasciato il laboratorio è in attesa con la data di uscita
+const isRequest = (p) => p.role === 'pending' && !p.left_at;
+const hasLeft = (p) => p.role === 'pending' && !!p.left_at;
+// accesso d'emergenza al diario di qualcuno (solo lo sviluppatore, chi scrive lo vede)
+const forcedTo = (who) => (S.shares || []).some((s) => s.forced && s.owner_id === who && s.viewer_id === S.uid);
 
 function bookingWindow() {
   const from = addDays(fromKey(dayKey(new Date())), -2);
@@ -565,12 +573,13 @@ function diaryTab() {
 }
 function viewNav() {
   const n = S.items.filter((i) => i.status === 'da_ordinare').length + emptyCyl().length + fullWaste().length + openRequests().length;
-  const pending = isAdmin() ? S.profiles.filter((p) => p.role === 'pending').length : 0;
+  const pending = isDev() ? S.profiles.filter(isRequest).length : 0;
   // Prenota e Protocolli si aprono dai riquadri della Home: la barra resta su Home
   const cur = S.tab === 'prenota' || S.tab === 'protocolli' ? 'inventario' : S.tab;
   const tab = (id, label, ic, badge) => `<button type="button" data-act="tab" data-tab="${id}" ${cur === id ? 'aria-current="page"' : ''}>
     ${icon(ic)}<span>${label}</span>${badge ? `<span class="dot">${badge}</span>` : ''}</button>`;
-  const todo = dueCount() + dueStrains().length + myDueStocks().length + todoMine().length + myFresh().length;
+  const me = todoOf(`id:${S.uid}`);
+  const todo = dueCount() + me.late - me.tasks.filter((t) => t.due_on <= todayKey()).length + (isAdmin() ? commonStocks().filter((x) => stockDue(x).late).length + commonStrains().length : 0);
   const pend = S.outbox.length;
   const pill = S.offline || pend ? `<div class="offline-pill" role="status">${icon('alert')}${S.offline ? 'Senza rete' : 'Invio in corso'}${pend ? `, ${pend} ${pend === 1 ? 'modifica' : 'modifiche'} in attesa` : S.cacheAt ? `, dati di ${ago(new Date(S.cacheAt).toISOString())}` : ''}</div>`
     : S.updateReady ? `<button type="button" class="offline-pill update-pill" data-act="reload">${icon('refresh')}Versione nuova pronta, tocca per aggiornare</button>` : '';
@@ -2223,18 +2232,20 @@ function usageSheet() {
 }
 function viewAltro() {
   const me = S.me;
-  const pending = S.profiles.filter((p) => p.role === 'pending');
+  const pending = S.profiles.filter(isRequest);
   const members = S.profiles.filter((p) => p.role !== 'pending');
   const row = (act, ic, title, sub = '', extra = '') => `<button type="button" class="menu-row" data-act="${act}">${icon(ic)}
     <div class="grow"><div>${title}</div>${sub ? `<div class="sub">${sub}</div>` : ''}</div>${extra}${icon('chev', 'chev')}</button>`;
   const admin = isAdmin() ? `<div class="section-title">Amministrazione</div><div class="card menu">
-      ${row('admin-pending', 'userPlus', 'Richieste di accesso', pending.length ? `${pending.length} in attesa` : 'Nessuna richiesta', pending.length ? `<span class="badge warn">${pending.length}</span>` : '')}
+      ${isDev() ? row('admin-pending', 'userPlus', 'Richieste di accesso', pending.length ? `${pending.length} in attesa` : 'Nessuna richiesta', pending.length ? `<span class="badge warn">${pending.length}</span>` : '') : ''}
       ${row('admin-people', 'users', 'Persone', `${members.length} nel laboratorio`)}
       ${row('admin-inst', 'tool', 'Strumenti', `${S.instruments.length} in elenco`)}
-      ${row('admin-backup', 'shield', 'Copie di sicurezza', 'Ogni notte sul server, e una copia sul PC o su Drive')}
+      ${isDev() ? row('admin-backup', 'shield', 'Copie di sicurezza', 'Ogni notte sul server, e una copia sul PC o su Drive') : ''}
       ${row('admin-space', 'boxes', 'Spazio usato', usageLine(), usageWarn() ? `<span class="badge warn">${usageWarn()}%</span>` : '')}
       ${(() => { const nd = dupCount(); return row('dups', 'merge', 'Doppioni dell\'inventario', nd ? `${nOf(nd, 'gruppo', 'gruppi')} da controllare` : 'Nessuno da controllare', nd ? `<span class="badge warn">${nd}</span>` : ''); })()}
-      ${(() => { const open = (S.onboarding || []).filter((o) => !o.done_at).length; return row('onb-admin', 'flag', 'Ingresso dei nuovi', open ? `${nOf(open, 'lista aperta', 'liste aperte')}` : 'Corsi, DPI, giro del laboratorio, strumenti'); })()}</div>` : '';
+      ${(() => { const open = (S.onboarding || []).filter((o) => !o.done_at).length; return row('onb-admin', 'flag', 'Ingresso dei nuovi', open ? `${nOf(open, 'lista aperta', 'liste aperte')}` : 'Corsi, DPI, giro del laboratorio, strumenti'); })()}
+      ${isDev() ? row('diary-force', 'lock', 'Accesso d\'emergenza ai diari', 'Per recuperare il diario di qualcuno. Chi lo scrive lo vede') : ''}</div>
+      ${isDev() ? '' : `<p class="hint" style="margin:8px 4px 0">Chi entra, i ruoli e le copie di sicurezza li gestisce ${esc(devName())}, lo sviluppatore dell'app.</p>`}` : '';
   // la propria lista d'ingresso e quelle di chi segui come tutor, finché sono aperte
   const onbMine = (S.onboarding || []).filter((o) => !o.done_at && (o.user_id === S.uid || o.tutor_id === S.uid));
   const onbHtml = onbMine.length ? `<div class="section-title">Ingresso nel laboratorio</div><div class="card menu">${onbMine.map((o) => { const { n, d } = onbProg(o);
@@ -2393,7 +2404,7 @@ function newPasswordForm() {
 }
 
 function adminPending() {
-  const list = S.profiles.filter((p) => p.role === 'pending');
+  const list = S.profiles.filter(isRequest);
   openSheet('Richieste di accesso', list.length ? `<div class="list">${list.map((p) => `<div class="card person">
       <span class="avatar">${esc(p.full_name.slice(0, 1).toUpperCase())}</span><div style="flex:1;min-width:0"><b>${esc(p.full_name)}</b><div class="sub" style="color:var(--muted);font-size:13px;overflow-wrap:anywhere">${esc(p.email || '')}</div></div>
       <button type="button" class="btn small primary" data-ok="${p.id}">Approva</button><button type="button" class="btn small" data-no="${p.id}" aria-label="Rifiuta">${icon('x')}</button></div>`).join('')}</div>`
@@ -2411,18 +2422,26 @@ function adminPending() {
 }
 
 function adminPeople() {
-  const list = S.profiles.filter((p) => p.role !== 'pending').sort((a, b) => a.full_name.localeCompare(b.full_name, 'it'));
-  openSheet('Persone', `<div class="list">${list.map((p) => `<button type="button" class="card person" style="border:0;width:100%;text-align:left" data-p="${p.id}">
-      <span class="avatar">${esc(p.full_name.slice(0, 1).toUpperCase())}</span><div style="flex:1;min-width:0"><b>${esc(p.full_name)}${p.id === S.uid ? ' (tu)' : ''}</b>
-      <div style="color:var(--muted);font-size:13px">${roleLabel[p.role]}</div></div>${icon('chev', 'chev')}</button>`).join('')}</div>`, (sh) => {
+  const byName = (a, b) => (a.full_name || '').localeCompare(b.full_name || '', 'it');
+  const list = S.profiles.filter((p) => p.role !== 'pending').sort(byName), left = S.profiles.filter(hasLeft).sort(byName);
+  const card = (p) => `<button type="button" class="card person" style="border:0;width:100%;text-align:left" data-p="${p.id}">
+      <span class="avatar">${esc((p.full_name || '?').slice(0, 1).toUpperCase())}</span><div style="flex:1;min-width:0"><b>${esc(p.full_name)}${p.id === S.uid ? ' (tu)' : ''}</b>
+      <div style="color:var(--muted);font-size:13px">${p.left_at ? `uscito il ${fmtDate(p.left_at.slice(0, 10))}` : `${roleLabel[p.role]}${p.developer ? ', sviluppatore' : ''}`}</div></div>${icon('chev', 'chev')}</button>`;
+  openSheet('Persone', `<div class="list">${list.map(card).join('')}</div>
+    ${left.length ? `<div class="section-title">Hanno lasciato il laboratorio <span class="count">${left.length}</span></div><div class="list">${left.map(card).join('')}</div>` : ''}
+    ${isDev() ? '' : `<p class="hint">Chi entra e i ruoli li gestisce ${esc(devName())}, lo sviluppatore dell'app.</p>`}`, (sh) => {
     sh.addEventListener('click', (e) => {
       const id = e.target.closest('[data-p]')?.dataset.p;
       if (!id) return;
-      const p = person(id);
-      openSheet(p.full_name, `<p style="color:var(--muted);margin-top:0;overflow-wrap:anywhere">${esc(p.email || '')} · ${roleLabel[p.role]}</p>
-        <button type="button" class="btn block" data-onb="${p.id}" style="margin-bottom:10px">${icon('flag')}${onbOf(p.id) ? 'Lista d\'ingresso' : 'Comincia la lista d\'ingresso'}</button>
-        ${p.role === 'member' ? `<button type="button" class="btn block" data-r="admin">Rendi amministratore</button>` : `<button type="button" class="btn block" data-r="member">Togli ruolo di amministratore</button>`}
-        ${p.id !== S.uid ? `<button type="button" class="btn danger block" style="margin-top:10px" data-r="remove">${icon('trash')}Rimuovi dal laboratorio</button>` : ''}`, (sh2) => {
+      const p = person(id), dev = isDev(), self = id === S.uid, gone = hasLeft(p);
+      const btns = !dev || self ? '' : gone
+        ? `<button type="button" class="btn primary block" data-r="member">${icon('userPlus')}Ridai l'accesso</button>
+           <button type="button" class="btn ghost block danger-text" style="margin-top:10px" data-r="remove">${icon('trash')}Cancella l'account e i suoi dati</button>`
+        : `${p.role === 'member' ? `<button type="button" class="btn block" data-r="admin">Rendi amministratore</button>` : `<button type="button" class="btn block" data-r="member">Togli ruolo di amministratore</button>`}
+           <button type="button" class="btn danger block" style="margin-top:10px" data-r="pending">${icon('logout')}Ha lasciato il laboratorio</button>`;
+      openSheet(p.full_name, `<p style="color:var(--muted);margin-top:0;overflow-wrap:anywhere">${esc(p.email || '')} · ${gone ? `ha lasciato il laboratorio il ${fmtDate(p.left_at.slice(0, 10))}` : roleLabel[p.role]}</p>
+        ${gone ? '' : `<button type="button" class="btn block" data-onb="${p.id}" style="margin-bottom:10px">${icon('flag')}${onbOf(p.id) ? 'Lista d\'ingresso' : 'Comincia la lista d\'ingresso'}</button>`}
+        ${btns}`, (sh2) => {
         sh2.addEventListener('click', (ev) => {
           const ob = ev.target.closest('[data-onb]')?.dataset.onb;
           if (ob) { onbStart(ob); return; }
@@ -2431,14 +2450,44 @@ function adminPeople() {
           const run = async () => {
             try {
               if (r === 'remove') await S.api.removeMember(id); else await S.api.setRole(id, r);
-              await loadData(true); toast('Fatto'); adminPeople();
+              await loadData(true); toast(r === 'pending' ? 'Non entra più, i suoi dati restano' : r === 'remove' ? 'Account cancellato' : 'Fatto'); adminPeople();
             } catch (x) { toast(x.message); }
           };
-          if (r === 'remove') confirmSheet('Rimuovere?', `${p.full_name} perderà l'accesso e il suo account verrà cancellato.`, 'Rimuovi', true, run);
+          if (r === 'pending') confirmSheet(`${p.full_name} ha lasciato il laboratorio?`, 'Non potrà più entrare nell\'app. I suoi dati restano, diario compreso, e puoi ridargli l\'accesso quando vuoi.', 'Togli l\'accesso', true, run);
+          else if (r === 'remove') confirmSheet('Cancellare l\'account?', `Si cancellano anche il diario di ${p.full_name} e le sue cose personali, e non si recuperano. Se il diario può servire, prima aprilo con l'accesso d'emergenza e scaricalo.`, 'Cancella', true, run);
           else run();
         });
       });
     });
+  });
+}
+
+// giro 54: accesso d'emergenza ai diari. Lo sviluppatore apre il diario di qualcuno quando va recuperato,
+// scrivendo il motivo; chi lo scrive lo trova fra le sue condivisioni e in cima al suo diario
+function diaryForceSheet() {
+  const byName = (a, b) => (a.full_name || '').localeCompare(b.full_name || '', 'it');
+  const people = S.profiles.filter((p) => p.id !== S.uid && (p.role !== 'pending' || p.left_at)).sort((a, b) => !!a.left_at - !!b.left_at || byName(a, b));
+  openSheet('Accesso d\'emergenza ai diari', `<p class="hint" style="margin-top:0">I diari li leggono solo chi li scrive e chi li riceve con Manda. Se il diario di qualcuno va recuperato (ha lasciato il laboratorio, non è raggiungibile), da qui lo apri. ${icon('lock')} Resta scritto: la persona lo vede fra le sue condivisioni, con il motivo.</p>
+    <form id="f" autocomplete="off">
+      <label class="field"><span>Di chi</span><select name="who" required><option value="">Scegli</option>${people.map((p) => `<option value="${p.id}">${esc(p.full_name || p.email)}${p.left_at ? ' (uscito)' : ''}</option>`).join('')}</select></label>
+      <label class="field"><span>Motivo</span><input name="why" required minlength="5" maxlength="300" placeholder="es. ha finito la tesi, servono le estrazioni di maggio"></label>
+      <p class="err" id="err"></p>
+      <button class="btn primary block" type="submit">${icon('book')}Apri il diario</button></form>`, (sh) => {
+    $('#f', sh).onsubmit = (e) => {
+      e.preventDefault();
+      const f = e.target.elements, who = f.who.value, why = f.why.value.trim();
+      if (!who) { $('#err', sh).textContent = 'Scegli di chi'; return; }
+      if (why.length < 5) { $('#err', sh).textContent = 'Scrivi il motivo'; return; }
+      busy(e.submitter, async () => {
+        try {
+          const id = await S.api.forceDiaryAccess(who, why);
+          S.shares = await S.api.shares(); delete S.diaryOther[who];
+          closeSheet();
+          if (S.tab !== 'inventario' || S.cat !== 'diario') { S.tab = 'inventario'; openCat('diario'); }
+          openShared(id); loadDiaryExtra(who, true);
+        } catch (x) { $('#err', sh).textContent = x.message; }
+      });
+    };
   });
 }
 
@@ -4165,7 +4214,10 @@ function dueLabel(t) {
 }
 
 function viewDaFare() {
-  return `${header('Da fare', `<button type="button" class="icon-btn" data-act="refresh" aria-label="Aggiorna">${icon('refresh')}</button>`)}</header>
+  const cur = S.todoTab === 'mie' ? 'mie' : 'lab', mine = todoOf(`id:${S.uid}`).n, lab = labTodoCount();
+  const seg = (v, l, n) => `<button type="button" data-act="todo-tab" data-v="${v}" aria-pressed="${cur === v}">${l}${n ? `<span class="count">${n}</span>` : ''}</button>`;
+  return `${header('Da fare', `<button type="button" class="icon-btn" data-act="refresh" aria-label="Aggiorna">${icon('refresh')}</button>`)}
+      <div class="tabs2 seg-top kind-seg">${seg('lab', 'Laboratorio', lab)}${seg('mie', 'Personali', mine)}</div></header>
     <main>${tasksList()}</main>
     <button type="button" class="fab" data-act="new-task">${icon('plus')}Nuovo compito</button>`;
 }
@@ -4183,15 +4235,21 @@ function viewProblemi() {
     <button type="button" class="fab" data-act="${inc ? 'new-incident' : 'new-issue'}">${icon(inc ? 'shield' : 'camera')}${inc ? 'Registra' : 'Segnala'}</button>`;
 }
 
-// Rimanda: chi rimanda sceglie il giorno
-function snoozeSheet(title, onPick) {
+// Rimanda: chi rimanda sceglie il giorno. Giro 52: dallo stesso foglio si passa la cosa a un collega
+//   deleg: { cur: uid di chi la fa ora, pick: (uid) => ... }
+function snoozeSheet(title, onPick, deleg = null) {
   const t = fromKey(todayKey());
   const mon = addDays(t, ((8 - t.getDay()) % 7) || 7);
   const opts = [[dayKey(addDays(t, 1)), 'Domani'], [dayKey(addDays(t, 3)), 'Fra 3 giorni'], [dayKey(mon), 'Lunedì prossimo'], [dayKey(addDays(t, 7)), 'Fra una settimana'], [dayKey(addDays(t, 30)), 'Fra un mese']];
   openSheet(`Rimanda: ${title}`, `<div class="seg" style="margin-bottom:12px">${opts.map(([k, l]) => `<button type="button" class="chip" data-k="${k}">${l}</button>`).join('')}</div>
     <form id="f"><label class="field"><span>Oppure scegli il giorno</span><input name="day" type="date" min="${dayKey(addDays(t, 1))}"></label>
-    <button class="btn primary block" type="submit">Rimanda</button></form>`, (sh) => {
+    <button class="btn primary block" type="submit">Rimanda</button></form>
+    ${deleg ? `<div class="section-title">${icon('user')}Oppure la fa un collega</div><div class="seg wrap deleg">${S.profiles.filter((p) => p.role !== 'pending' && p.id !== deleg.cur)
+      .sort((a, b) => (b.id === S.uid) - (a.id === S.uid) || (a.full_name || '').localeCompare(b.full_name || '', 'it'))
+      .map((p) => `<button type="button" class="chip" data-to="${p.id}">${p.id === S.uid ? 'Io' : esc(p.full_name || p.email)}</button>`).join('')}</div>
+      <p class="hint">La trova nelle sue cose da fare, in Personali.</p>` : ''}`, (sh) => {
     const go = (k) => { closeSheet(); onPick(k); };
+    sh.querySelectorAll('[data-to]').forEach((b) => (b.onclick = () => { closeSheet(); deleg.pick(b.dataset.to); }));
     sh.querySelectorAll('[data-k]').forEach((b) => (b.onclick = () => go(b.dataset.k)));
     $('#f', sh).onsubmit = (e) => { e.preventDefault(); const k = e.target.elements.day.value; if (k) go(k); };
   });
@@ -4200,7 +4258,9 @@ function snoozeTask(id) {
   const t = S.tasks.find((x) => x.id === id); if (!t) return;
   snoozeSheet(t.title, async (k) => {
     try { replaceTask(await S.api.saveTask({ ...t, due_on: k })); render(); toast(`Rimandato a ${fmtDay(fromKey(k))}`); } catch (e) { toast(e.message); }
-  });
+  }, { cur: t.assigned_to, pick: async (uid) => {
+    try { replaceTask(await S.api.saveTask({ ...t, assigned_to: uid })); render(); toast(uid === S.uid ? 'Ora tocca a te' : `Ora tocca a ${firstName(uid)}`); } catch (e) { toast(e.message); }
+  } });
 }
 function snoozeStrain(id) {
   const st = S.strains.find((x) => x.id === id); if (!st) return;
@@ -4210,9 +4270,13 @@ function snoozeStrain(id) {
 }
 function snoozeStock(id) {
   const x = S.stocks.find((y) => y.id === id); if (!x) return;
+  const ref = strainOf(x)?.keeper_id || null;
   snoozeSheet(`${stockKind(x.kind).label.toLowerCase()} di ${strainTitle(strainOf(x))}`, async (k) => {
     try { replaceStock(await S.api.saveStock({ ...x, snooze_until: k })); render(); toast(`Rimandate a ${fmtDay(fromKey(k))}`); } catch (e) { toast(e.message); }
-  });
+  }, { cur: stockKeeper(x), pick: async (uid) => {
+    // le rifà il collega scelto ("Chi le rifà" della conservazione); se è il referente del ceppo torna al referente
+    try { replaceStock(await S.api.saveStock({ ...x, keeper_id: uid === ref ? null : uid })); render(); toast(uid === S.uid ? 'Le rifai tu' : `Le rifà ${firstName(uid)}`); } catch (e) { toast(e.message); }
+  } });
 }
 
 function taskCard(t) {
@@ -4225,46 +4289,62 @@ function taskCard(t) {
   if (t.done) tags.push(`<span class="badge ok">${icon('check')}fatto</span>`);
   return `<div class="item task" data-act="open-task" data-id="${t.id}" role="button" tabindex="0">
     <div class="body"><div class="name">${esc(t.title)}</div><div class="meta">${esc(meta)}</div><div class="tags">${tags.join('')}</div></div>
-    ${t.done ? '' : `<div class="task-acts"><button type="button" class="done-btn" data-act="task-done" data-id="${t.id}" aria-label="Segna fatto: ${esc(t.title)}">${icon('check')}<span>Fatto</span></button><button type="button" class="snooze-btn" data-act="task-snooze" data-id="${t.id}">Rimanda</button></div>`}</div>`;
+    ${t.done ? '' : `<div class="task-acts"><button type="button" class="done-btn" data-act="task-done" data-id="${t.id}" aria-label="Segna fatto: ${esc(t.title)}">${icon('check')}<span>Fatto</span></button><button type="button" class="later-btn" data-act="task-snooze" data-id="${t.id}" aria-label="Rimanda o passa a un collega: ${esc(t.title)}">${icon('clock')}</button></div>`}</div>`;
 }
 
-function tasksList() {
+// giro 52: Da fare in due parti. Laboratorio: compiti comuni, strumenti, rifiuti, problemi e la micoteca senza referente.
+// Personali: le cose di ognuno (conservazioni e ripicche dei propri ceppi, compiti che toccano a lui, campioni freschi),
+// con un menu per vedere quelle di un collega
+function tasksList() { return S.todoTab === 'mie' ? todoPersonal() : todoLab(); }
+const todoSec = (title, ic, html, n) => (n ? `<div class="section-title">${icon(ic)}${title} <span class="count">${n}</span></div>${html}` : '');
+const todoStrainRow = (st) => `<div class="item strain" data-act="strain-open" data-id="${st.id}" role="button" tabindex="0">
+    <div class="cat-ic">${icon('petri')}</div><div class="body"><div class="name">Ripicca di ${st.code ? `<span class="mono">${esc(st.code)}</span> ` : ''}<i>${esc(st.species || '')}</i></div>
+      <div class="meta">${esc([keeperLabel(st) && `ref. ${keeperLabel(st)}`, st.medium].filter(Boolean).join(' · '))}</div><div class="tags">${strainBadges(st)}</div></div>
+    <div class="task-acts"><button type="button" class="done-btn" data-act="strain-sub" data-id="${st.id}" aria-label="Ripicca fatta">${icon('check')}<span>Fatta</span></button><button type="button" class="later-btn" data-act="strain-snooze" data-id="${st.id}" aria-label="Rimanda la ripicca">${icon('clock')}</button></div></div>`;
+const todoStockRow = (x) => stockCard(x).replace(/<button type="button" class="act-btn" data-act="stock-renew" data-id="([^"]+)">Rifatte<\/button>/, '<div class="task-acts"><button type="button" class="done-btn" data-act="stock-renew" data-id="$1" aria-label="Rifatte oggi">' + icon('check') + '<span>Rifatte</span></button><button type="button" class="later-btn" data-act="stock-snooze" data-id="$1" aria-label="Rimanda o passa a un collega">' + icon('clock') + '</button></div>');
+const todoRow = ({ k, x }) => `<div class="item todo-row" data-act="todo-open" data-k="${k}" data-id="${x.id}" role="button" tabindex="0"><div class="cat-ic">${icon(k === 'strain' ? 'petri' : k === 'proto' ? 'file' : k === 'sample' ? 'leaf' : 'flask')}</div>
+    <div class="body"><div class="name">${esc(k === 'strain' ? strainTitle(x) : x.title || x.name)}</div><div class="meta">${{ strain: 'Micoteca', proto: 'Protocolli', sample: 'Campioni', item: 'Inventario' }[k]}, aggiunto al volo dal diario</div><div class="tags">${todoBadge(x)}</div></div>${icon('chev', 'chev')}</div>`;
+const freshRows = (fresh) => `<div class="list">${fresh.map((it) => `<div class="item sample" data-act="open-item" data-id="${it.id}" data-c="campioni" role="button" tabindex="0"><div class="cat-ic">${sampleIcon(it.sample_type)}</div>
+      <div class="body"><div class="name">${esc(it.name)}</div><div class="meta">liofilizza, congela o butta</div><div class="tags">${stateBadge(it)}${it.location ? `<span class="badge muted">${esc(it.location)}</span>` : ''}</div></div>${icon('chev', 'chev')}</div>`).join('')}</div>`;
+function labTodoCount() {
+  const open = openTasks().filter((t) => daysBetween(todayKey(), t.due_on) <= 7);
+  return open.length + commonStocks().length + commonStrains().length;
+}
+function todoLab() {
   const today = todayKey();
   const open = openTasks().sort((a, b) => a.due_on.localeCompare(b.due_on) || a.title.localeCompare(b.title, 'it'));
   const soon = (t) => daysBetween(today, t.due_on) <= 7;
   const lab = open.filter((t) => !t.instrument_id && soon(t));
   const inst = open.filter((t) => t.instrument_id && soon(t));
   const later = open.filter((t) => !soon(t));
-  const strainsDue = dueStrains().sort((a, b) => (subDue(a).days) - (subDue(b).days));
-  const stocksDue = dueStocks().sort((a, b) => stockDue(a).due.localeCompare(stockDue(b).due));
-  const mineStocks = stocksDue.filter((x) => myDueStocks().includes(x)), otherStocks = stocksDue.filter((x) => !myDueStocks().includes(x));
+  const mico = [...commonStocks().map(todoStockRow), ...commonStrains().map(todoStrainRow)];
   const done = S.tasks.filter((t) => t.done).sort((a, b) => (b.last_done_at || '').localeCompare(a.last_done_at || '')).slice(0, 10);
-  const todos = todoMine();
-  const fresh = myFresh().sort((a, b) => freshAge(b) - freshAge(a));
-  if (!open.length && !strainsDue.length && !stocksDue.length && !done.length && !todos.length && !fresh.length) {
-    return `<div class="empty">${icon('checklist')}<b>Nessun compito</b>Aggiungi le cose da fare in laboratorio, anche quelle che si ripetono come autoclave, puntali o acqua distillata. Qui compaiono anche le ripicche e le conservazioni della micoteca da rifare.</div>` + wasteSection() + problemsSection();
+  if (!open.length && !mico.length && !done.length) {
+    return `<div class="empty">${icon('checklist')}<b>Nessun compito</b>Aggiungi le cose da fare in laboratorio, anche quelle che si ripetono come autoclave, puntali o acqua distillata. Le cose dei tuoi ceppi e dei tuoi campioni sono in Personali.</div>` + wasteSection() + problemsSection();
   }
-  const sec = (title, ic, html, n) => (n ? `<div class="section-title">${icon(ic)}${title} <span class="count">${n}</span></div>${html}` : '');
-  const late = open.filter((t) => t.due_on < today).length + strainsDue.length + mineStocks.filter((x) => stockDue(x).late).length;
-  const clear = !late && !open.some((t) => t.due_on === today) ? `<div class="banner ok-banner" style="margin-top:12px">${icon('checkCircle')}<div>Per oggi è tutto fatto.</div></div>` : '';
-  const strainRow = (st) => `<div class="item strain" data-act="strain-open" data-id="${st.id}" role="button" tabindex="0">
-    <div class="cat-ic">${icon('petri')}</div><div class="body"><div class="name">Ripicca di ${st.code ? `<span class="mono">${esc(st.code)}</span> ` : ''}<i>${esc(st.species || '')}</i></div>
-      <div class="meta">${esc([keeperLabel(st) && `ref. ${keeperLabel(st)}`, st.medium].filter(Boolean).join(' · '))}</div><div class="tags">${strainBadges(st)}</div></div>
-    <div class="task-acts"><button type="button" class="done-btn" data-act="strain-sub" data-id="${st.id}" aria-label="Ripicca fatta">${icon('check')}<span>Fatta</span></button><button type="button" class="snooze-btn" data-act="strain-snooze" data-id="${st.id}">Rimanda</button></div></div>`;
-  const stockRow = (x) => stockCard(x).replace(/<button type="button" class="act-btn" data-act="stock-renew" data-id="([^"]+)">Rifatte<\/button>/, '<div class="task-acts"><button type="button" class="done-btn" data-act="stock-renew" data-id="$1" aria-label="Rifatte oggi">' + icon('check') + '<span>Rifatte</span></button><button type="button" class="snooze-btn" data-act="stock-snooze" data-id="$1">Rimanda</button></div>');
-  const mico = [...mineStocks.map(stockRow), ...strainsDue.map(strainRow), ...otherStocks.map(stockRow)];
-  const todoRow = ({ k, x }) => `<div class="item todo-row" data-act="todo-open" data-k="${k}" data-id="${x.id}" role="button" tabindex="0"><div class="cat-ic">${icon(k === 'strain' ? 'petri' : k === 'proto' ? 'file' : k === 'sample' ? 'leaf' : 'flask')}</div>
-    <div class="body"><div class="name">${esc(k === 'strain' ? strainTitle(x) : x.title || x.name)}</div><div class="meta">${{ strain: 'Micoteca', proto: 'Protocolli', sample: 'Campioni', item: 'Inventario' }[k]}, aggiunto al volo dal diario</div><div class="tags">${todoBadge(x)}</div></div>${icon('chev', 'chev')}</div>`;
-  return (todos.length ? '' : clear)
-    + sec('Da completare', 'alert', `<div class="list">${todos.map(todoRow).join('')}</div>`, todos.length)
-    + sec('Laboratorio', 'checklist', `<div class="list">${lab.map(taskCard).join('')}</div>`, lab.length)
-    + sec('Micoteca e colture', 'petri', `<div class="list">${mico.join('')}</div>`, mico.length)
-    + sec('Campioni freschi da lavorare', 'leaf', `<div class="list">${fresh.map((it) => `<div class="item sample" data-act="open-item" data-id="${it.id}" data-c="campioni" role="button" tabindex="0"><div class="cat-ic">${sampleIcon(it.sample_type)}</div>
-      <div class="body"><div class="name">${esc(it.name)}</div><div class="meta">liofilizza, congela o butta</div><div class="tags">${stateBadge(it)}${it.location ? `<span class="badge muted">${esc(it.location)}</span>` : ''}</div></div>${icon('chev', 'chev')}</div>`).join('')}</div>`, fresh.length)
-    + sec('Strumenti', 'tool', `<div class="list">${inst.map(taskCard).join('')}</div>`, inst.length)
+  const late = open.filter((t) => t.due_on < today).length;
+  const clear = !late && !open.some((t) => t.due_on === today) ? `<div class="banner ok-banner" style="margin-top:12px">${icon('checkCircle')}<div>Per oggi in laboratorio è tutto fatto.</div></div>` : '';
+  return clear
+    + todoSec('Compiti', 'checklist', `<div class="list">${lab.map(taskCard).join('')}</div>`, lab.length)
+    + todoSec('Strumenti', 'tool', `<div class="list">${inst.map(taskCard).join('')}</div>`, inst.length)
+    + todoSec('Micoteca, senza referente', 'petri', `<div class="list">${mico.join('')}</div>`, mico.length)
     + wasteSection() + problemsSection()
-    + sec('Più avanti', 'calendar', `<div class="list">${later.map(taskCard).join('')}</div>`, later.length)
-    + sec('Fatti di recente', 'checkCircle', `<div class="list">${done.map(taskCard).join('')}</div>`, done.length);
+    + todoSec('Più avanti', 'calendar', `<div class="list">${later.map(taskCard).join('')}</div>`, later.length)
+    + todoSec('Fatti di recente', 'checkCircle', `<div class="list">${done.map(taskCard).join('')}</div>`, done.length);
+}
+function todoPersonal() {
+  const people = todoPeople(), me = `id:${S.uid}`;
+  const who = S.todoWho && people.some(([k]) => k === S.todoWho) ? S.todoWho : me;
+  const mine = who === me, name = mine ? '' : ownerLabel(who).split(' ')[0];
+  const t = todoOf(who);
+  const menu = people.length > 1 ? `<div class="mico-filters todo-who"><label class="mf-sel${mine ? '' : ' on'}">${icon('user')}<select data-todo-who aria-label="Di chi">${people.map(([k, n]) => `<option value="${esc(k)}"${k === who ? ' selected' : ''}>${esc(k === me ? 'Le mie' : ownerLabel(k))}${n ? ` (${n})` : ''}</option>`).join('')}</select>${icon('chev', 'chev')}</label></div>` : '';
+  if (!t.n) return `${menu}<div class="empty">${icon('checkCircle')}<b>${mine ? 'Niente di tuo da fare' : `Niente da fare per ${esc(name)}`}</b>${mine ? 'Qui compaiono le conservazioni e le ripicche dei tuoi ceppi, i compiti che toccano a te e i campioni freschi da lavorare.' : ''}</div>`;
+  const mico = [...t.stocks.map(todoStockRow), ...t.strains.map(todoStrainRow)];
+  return menu
+    + todoSec('Da completare', 'alert', `<div class="list">${t.todos.map(todoRow).join('')}</div>`, t.todos.length)
+    + todoSec(mine ? 'Toccano a te' : `Toccano a ${esc(name)}`, 'checklist', `<div class="list">${t.tasks.map(taskCard).join('')}</div>`, t.tasks.length)
+    + todoSec('Micoteca e colture', 'petri', `<div class="list">${mico.join('')}</div>`, mico.length)
+    + todoSec('Campioni freschi da lavorare', 'leaf', freshRows(t.fresh), t.fresh.length);
 }
 
 // taniche piene da far ritirare, e il collegamento a tutte le taniche
@@ -7273,6 +7353,8 @@ const backupOf = (x) => (SHORT_STOCK.has(x.kind) ? S.stocks.find((y) => y.strain
 function stockDue(x) {
   if (x.status !== 'attiva' || !x.renew_months) return null;
   if (!x.made_on) return { unknown: true, late: false, soon: false };
+  // giro 52: rimandate, non compaiono fra le cose da fare fino al giorno scelto
+  if (x.snooze_until && x.snooze_until > todayKey()) return { due: x.snooze_until, days: daysBetween(todayKey(), x.snooze_until), late: false, soon: false, snoozed: true };
   let due = addMonthsKey(x.made_on, x.renew_months);
   if (x.snooze_until && x.snooze_until > due) due = x.snooze_until;
   const days = daysBetween(todayKey(), due);
@@ -7282,6 +7364,39 @@ function stockDue(x) {
 const oldStocks = () => S.stocks.filter((x) => stockDue(x)?.old && strainOf(x)?.status === 'attivo');
 const dueStocks = () => S.stocks.filter((x) => { const d = stockDue(x); return d && (d.late || d.soon) && strainOf(x)?.status === 'attivo'; });
 const myDueStocks = () => dueStocks().filter((x) => { const k = stockKeeper(x); return k ? k === S.uid : isAdmin(); });
+// giro 52: Da fare diviso fra le cose del laboratorio e quelle di ognuno. Una conservazione è di chi la rifà
+// (o del referente del ceppo), una ripicca del referente. Un nome scritto a mano vale come l'account con lo stesso nome
+const ownKey = (k) => {
+  if (!k || !k.startsWith('n:')) return k || '';
+  const p = S.profiles.find((x) => x.role !== 'pending' && norm(x.full_name || '').trim() === k.slice(2));
+  return p ? `id:${p.id}` : k;
+};
+const stockOwner = (x) => ownKey(x.keeper_id ? `id:${x.keeper_id}` : refKey(strainOf(x) || {}));
+const strainOwner = (st) => ownKey(refKey(st));
+const ownerLabel = (k) => (k === `id:${S.uid}` ? 'Tu' : k.startsWith('id:') ? person(k.slice(3))?.full_name || 'Un collega' : refLabel(k));
+function todoOf(who) {
+  const uid = who.startsWith('id:') ? who.slice(3) : null, today = todayKey();
+  const stocks = dueStocks().filter((x) => stockOwner(x) === who).sort((a, b) => stockDue(a).due.localeCompare(stockDue(b).due));
+  const strains = dueStrains().filter((st) => strainOwner(st) === who).sort((a, b) => subDue(a).days - subDue(b).days);
+  const tasks = uid ? openTasks().filter((t) => t.assigned_to === uid && daysBetween(today, t.due_on) <= 7).sort((a, b) => a.due_on.localeCompare(b.due_on)) : [];
+  const fresh = uid ? samples().filter((i) => freshDue(i) && (i.created_by === uid || i.updated_by === uid)).sort((a, b) => freshAge(b) - freshAge(a)) : [];
+  const todos = uid === S.uid ? todoMine() : [];
+  const late = stocks.filter((x) => stockDue(x).late).length + strains.length + tasks.filter((t) => t.due_on <= today).length + fresh.length + todos.length;
+  return { stocks, strains, tasks, fresh, todos, late, n: stocks.length + strains.length + tasks.length + fresh.length + todos.length };
+}
+// le cose della micoteca senza referente restano del laboratorio
+const commonStocks = () => dueStocks().filter((x) => !stockOwner(x)).sort((a, b) => stockDue(a).due.localeCompare(stockDue(b).due));
+const commonStrains = () => dueStrains().filter((st) => !strainOwner(st));
+// chi ha cose da fare, per il menu di Personali: prima tu, poi chi ne ha di più
+function todoPeople() {
+  const m = new Map([[`id:${S.uid}`, 0]]);
+  for (const p of S.profiles) if (p.role !== 'pending' && p.id !== S.uid) m.set(`id:${p.id}`, 0);
+  for (const x of dueStocks()) { const k = stockOwner(x); if (k) m.set(k, (m.get(k) || 0) + 1); }
+  for (const st of dueStrains()) { const k = strainOwner(st); if (k) m.set(k, (m.get(k) || 0) + 1); }
+  for (const t of openTasks()) if (t.assigned_to && daysBetween(todayKey(), t.due_on) <= 7) { const k = `id:${t.assigned_to}`; if (m.has(k)) m.set(k, m.get(k) + 1); }
+  const me = `id:${S.uid}`;
+  return [...m.entries()].sort((a, b) => (b[0] === me) - (a[0] === me) || b[1] - a[1] || ownerLabel(a[0]).localeCompare(ownerLabel(b[0]), 'it'));
+}
 const replaceStock = (row) => { const i = S.stocks.findIndex((x) => x.id === row.id); if (i >= 0) S.stocks[i] = row; else S.stocks.unshift(row); };
 const replaceStrain = (row) => { const i = S.strains.findIndex((x) => x.id === row.id); if (i >= 0) S.strains[i] = row; else S.strains.push(row); };
 const genus = (st) => (st.species || '').trim().split(/\s+/)[0] || 'Senza specie';
@@ -7696,7 +7811,7 @@ function strainPickSheet() {
 function stockLine(x) {
   const k = stockKind(x.kind), sd = stockDue(x);
   const made = x.made_on ? `fatte il ${fmtDate(x.made_on)}, ${ago(`${x.made_on}T12:00:00`)}` : 'data non segnata';
-  const due = !sd ? (x.renew_months ? '' : 'non va rifatta') : sd.unknown ? 'segna quando sono state fatte' : sd.old ? `vecchie, quando servono si rifanno ${stockKind(sd.backup.kind).from}` : sd.late ? `da rifare dal ${fmtDate(sd.due)}` : `da rifare entro il ${fmtDate(sd.due)}`;
+  const due = !sd ? (x.renew_months ? '' : 'non va rifatta') : sd.unknown ? 'segna quando sono state fatte' : sd.snoozed ? `rimandate al ${fmtDate(sd.due)}` : sd.old ? `vecchie, quando servono si rifanno ${stockKind(sd.backup.kind).from}` : sd.late ? `da rifare dal ${fmtDate(sd.due)}` : `da rifare entro il ${fmtDate(sd.due)}`;
   return [x.qty != null ? `${x.qty} ${k.unit[x.qty === 1 ? 0 : 1]}` : '', x.place, made, due].filter(Boolean).join(' · ');
 }
 
@@ -7707,7 +7822,7 @@ function stockCard(x) {
     <div class="cat-ic">${icon('snow')}</div>
     <div class="body"><div class="name">${esc(k.label)} · ${st.code ? `<span class="mono">${esc(st.code)}</span> ` : ''}<i>${esc(st.species || '')}</i></div>
       <div class="meta">${esc(stockLine(x))}</div>
-      <div class="tags">${sd?.late ? `<span class="badge warn">${icon('alert')}da rifare</span>` : sd?.soon ? `<span class="badge info">${icon('clock')}tra ${sd.days} g</span>` : sd?.old ? '<span class="badge muted">vecchie</span>' : ''}${kp ? `<span class="badge muted">${icon('user')}${esc(kp === S.uid ? 'tu' : person(kp)?.full_name || '')}</span>` : st.keeper_name ? `<span class="badge muted">${icon('user')}${esc(st.keeper_name)}</span>` : ''}</div></div>
+      <div class="tags">${sd?.late ? `<span class="badge warn">${icon('alert')}da rifare</span>` : sd?.soon ? `<span class="badge info">${icon('clock')}tra ${sd.days} g</span>` : sd?.snoozed ? `<span class="badge muted">${icon('clock')}rimandate</span>` : sd?.old ? '<span class="badge muted">vecchie</span>' : ''}${kp ? `<span class="badge muted">${icon('user')}${esc(kp === S.uid ? 'tu' : person(kp)?.full_name || '')}</span>` : st.keeper_name ? `<span class="badge muted">${icon('user')}${esc(st.keeper_name)}</span>` : ''}</div></div>
     <button type="button" class="act-btn" data-act="stock-renew" data-id="${x.id}">Rifatte</button></div>`;
 }
 
@@ -9975,9 +10090,9 @@ function chamberSlotForm(inst, shelf = 1, c = null, from = null) {
 }
 
 // ===========================================================================
-//  Caffè: chi compra le cialde, a punti (1 punto = 50 cialde)
+//  Caffè: chi compra le cialde, a punti (1 punto = una spunta della lavagna = 150 cialde)
 // ===========================================================================
-const PODS_PER_POINT = 50;
+const PODS_PER_POINT = 150;
 const podsTxt = (p) => `${fmtN(p * PODS_PER_POINT)} cialde`;
 const ptsTxt = (p) => `${p} ${p === 1 ? 'punto' : 'punti'}`;
 
@@ -12487,7 +12602,7 @@ async function loadDiaryExtra(who, force = false) {
 // materiali tolti dall'inventario, problemi segnalati. Lo vede chi scrive e l'amministratore.
 S.diaryAct = {};
 async function loadDiaryAct(who, force = false) {
-  if (!S.api.diaryActivity || !(who === S.uid || isAdmin())) return false;
+  if (!S.api.diaryActivity || !(who === S.uid || forcedTo(who))) return false;
   const c = S.diaryAct[who];
   if (!force && c && Date.now() - c.at < 60e3) return false;
   try { S.diaryAct[who] = { at: Date.now(), ...(await S.api.diaryActivity(who, dayKey(addDays(new Date(), -DIARY_DAYS)))) }; return true; } catch { return false; }
@@ -12621,8 +12736,11 @@ function renderDiaryHome(list) {
   const menu = `<div class="card menu dj-more">
     ${newIn ? `<button type="button" class="menu-row" data-act="diary-view" data-v="condivisi">${icon('send')}<div class="grow"><div>${nOf(newIn, 'diario nuovo ricevuto', 'diari nuovi ricevuti')}</div><div class="sub">da leggere in Condivisi</div></div>${icon('chev', 'chev')}</button>` : ''}
     <button type="button" class="menu-row" data-act="diary-export">${icon('download')}<div class="grow"><div>Scarica il diario</div><div class="sub">PDF, Word o Excel, anche solo le foto</div></div>${icon('chev', 'chev')}</button>
-    ${isAdmin() && S.profiles.some((x) => x.role !== 'pending' && x.id !== S.uid) ? `<button type="button" class="menu-row" data-act="diary-people">${icon('users')}<div class="grow"><div>Diari del laboratorio</div><div class="sub">da amministratore li leggi, senza cambiarli</div></div>${icon('chev', 'chev')}</button>` : ''}</div>`;
-  list.innerHTML = hero + rec + pht + menu;
+</div>`;
+  // giro 54: se lo sviluppatore ha aperto questo diario con l'accesso d'emergenza, chi scrive lo vede subito
+  const fz = (S.shares || []).filter((s) => s.forced && s.owner_id === S.uid);
+  const forced = fz.map((s) => `<div class="banner warn forced-banner" role="status">${icon('lock')}<div><b>${esc(person(s.viewer_id)?.full_name || 'Lo sviluppatore')} ha aperto il tuo diario</b> con l'accesso d'emergenza, il ${esc(fmtDate(s.created_at.slice(0, 10)))}.${s.note ? ` Motivo: <i>«${esc(s.note)}»</i>.` : ''}</div></div>`).join('');
+  list.innerHTML = forced + hero + rec + pht + menu;
   fillPhotos(list);
 }
 
@@ -12768,20 +12886,8 @@ function diaryPhotoAdd(pre = {}) {
   });
 }
 
-function diaryPeopleSheet() {
-  const people = S.profiles.filter((x) => x.role !== 'pending' && x.id !== S.uid).sort((a, b) => (a.full_name || '').localeCompare(b.full_name || '', 'it'));
-  openSheet('Diari del laboratorio', `<p class="hint" style="margin-top:0">Da amministratore puoi leggere il diario di ognuno, senza cambiarlo.</p>
-    <div class="card menu">${people.map((x) => `<button type="button" class="menu-row" data-who="${x.id}"><span class="avatar">${esc((x.full_name || '?').slice(0, 1).toUpperCase())}</span><div class="grow"><div>${esc(x.full_name || x.email)}</div></div>${icon('chev', 'chev')}</button>`).join('')}</div>`, (sh) => {
-    sh.addEventListener('click', (e) => {
-      const b = e.target.closest('[data-who]'); if (!b) return;
-      S.diaryWho = b.dataset.who; S.diaryFromShare = false; S.diaryView = 'giorni'; S.diaryProj = ''; S.diaryFrom = ''; S.diaryTo = ''; S.diaryQ = '';
-      closeSheet(); window.scrollTo(0, 0); render();
-    });
-  });
-}
-
 function diaryEntries(who) {
-  const d = diaryData(who), full = who === S.uid || isAdmin();
+  const d = diaryData(who), full = who === S.uid || forcedTo(who);
   const out = [];
   for (const j of d.journal) out.push({ day: j.day, kind: 'nota', at: j.created_at, proj: j.project_id || null, j });
   for (const r of d.runs) out.push({ day: r.run_on, kind: 'run', at: r.created_at, proj: r.project_id || null, r });
@@ -12928,7 +13034,8 @@ function renderDiario(list) {
   list.innerHTML = head + (html || `<div class="empty">${icon(filtered ? 'search' : 'book')}<b>${filtered ? 'Niente con questi filtri' : 'Ancora niente qui'}</b>${filtered ? '' : mine ? 'Le esecuzioni dei protocolli finiscono qui da sole. Il resto lo scrivi con Pagina.' : 'Nessuna pagina né esecuzione.'}</div>`) + more;
   if (!mine) {
     const sh = sharesToMe(who);
-    const why = isAdmin() && !sh.length ? `Lo vedi perché sei amministratore. Le pagine le può modificare solo ${esc(firstName(who))}.`
+    const fz = sh.find((s) => s.forced);
+    const why = fz ? `Lo vedi con l'accesso d'emergenza: <i>«${esc(fz.note || '')}»</i>. ${esc(firstName(who))} lo vede fra le sue condivisioni. Quando hai finito chiudilo da Condivisi.`
       : `${esc(firstName(who))} ti ha mandato ${esc(sh.map(shareScope).join('; ') || 'parte del suo diario')}. Lo leggi soltanto.${sh.find((s) => s.note) ? ` <i>«${esc(sh.find((s) => s.note).note)}»</i>` : ''}`;
     list.insertAdjacentHTML('afterbegin', `<p class="hint" style="margin:6px 4px 10px">${icon('user')} ${why}</p>`);
   }
@@ -12970,6 +13077,14 @@ function renderDiaryShared(list) {
   const seen = shareSeen();
   const card = (s, dir) => {
     const other = dir === 'in' ? s.owner_id : s.viewer_id;
+    if (s.forced) {
+      // giro 54: accesso d'emergenza. Chi lo usa lo chiude con la X; chi scrive lo vede ma non lo toglie
+      const name = esc(person(other)?.full_name || (dir === 'in' ? 'Un collega' : 'Lo sviluppatore'));
+      return `<div class="card share-card forced"><button type="button" class="share-main" ${dir === 'in' ? `data-act="share-open" data-id="${s.id}"` : 'disabled'}>
+        <span class="avatar">${icon('lock')}</span><span class="grow"><b>${dir === 'in' ? `Diario di ${name}` : `${name} ha aperto il tuo diario`}</b>
+        <span class="sub">Accesso d'emergenza, ${esc(fmtDate(s.created_at.slice(0, 10)))}</span>${s.note ? `<span class="sub"><i>«${esc(s.note)}»</i></span>` : ''}</span>${dir === 'in' ? icon('chev', 'chev') : ''}</button>
+        ${dir === 'in' ? `<button type="button" class="icon-btn" data-act="share-del" data-id="${s.id}" aria-label="Chiudi l'accesso d'emergenza">${icon('x')}</button>` : ''}</div>`;
+    }
     return `<div class="card share-card${dir === 'in' && s.created_at > seen ? ' new' : ''}"><button type="button" class="share-main" data-act="${dir === 'in' ? 'share-open' : 'share-edit'}" data-id="${s.id}">
       <span class="avatar">${esc((person(other)?.full_name || '?').slice(0, 1).toUpperCase())}</span><span class="grow"><b>${dir === 'in' ? esc(person(other)?.full_name || 'Un collega') : `a ${esc(person(other)?.full_name || 'un collega')}`}</b>
       <span class="sub">${esc(shareScope(s).replace(/^./, (c) => c.toUpperCase()))}</span>${s.note ? `<span class="sub"><i>«${esc(s.note)}»</i></span>` : ''}<span class="sub">${esc(ago(s.created_at))}${dir === 'in' && s.created_at > seen ? ' · <b class="warn-text">nuovo</b>' : ''}</span></span>${icon('chev', 'chev')}</button>
@@ -13048,6 +13163,12 @@ function shareForm(preset = {}) {
 function shareDelete(s) {
   if (!s) return;
   const mineS = s.owner_id === S.uid;
+  if (s.forced && !mineS) {
+    confirmSheet('Chiudere l\'accesso d\'emergenza?', `Il diario di ${firstName(s.owner_id)} torna privato. Se ti serve ancora lo riapri da Altro.`, 'Chiudi', false, async () => {
+      try { await S.api.deleteShare(s.id); S.shares = S.shares.filter((x) => x.id !== s.id); delete S.diaryOther[s.owner_id]; S.diaryWho = null; render(); toast('Accesso chiuso'); } catch (x) { toast(x.message); }
+    });
+    return;
+  }
   confirmSheet(mineS ? `Smettere di condividere con ${firstName(s.viewer_id)}?` : 'Togliere dalla tua lista?', mineS ? `Non vedrà più ${shareScope(s)}.` : `Non vedrai più ${shareScope(s)} di ${firstName(s.owner_id)}.`, mineS ? 'Smetti' : 'Togli', true, async () => {
     try { await S.api.deleteShare(s.id); S.shares = S.shares.filter((x) => x.id !== s.id); delete S.diaryOther[s.owner_id]; render(); toast(mineS ? 'Non lo vede più' : 'Tolto'); } catch (x) { toast(x.message); }
   });
@@ -13911,7 +14032,7 @@ function diaryExportSheet(preset = null) {
     ${o.q ? `<label class="toggle-row"><div class="grow">Solo le voci con «${esc(o.q)}»</div><input type="checkbox" name="q" checked></label>` : ''}
     <div class="x-all">
     <label class="toggle-row"><div class="grow">Esecuzioni dei protocolli<div class="sub">reagenti, lotti, note e problemi</div></div><input type="checkbox" name="runs" checked></label>
-    ${who === S.uid || isAdmin() ? `<label class="toggle-row"><div class="grow">Strumenti prenotati</div><input type="checkbox" name="books"></label>
+    ${who === S.uid || forcedTo(who) ? `<label class="toggle-row"><div class="grow">Strumenti prenotati</div><input type="checkbox" name="books"></label>
       <label class="toggle-row"><div class="grow">Fatto nell'app<div class="sub">ripicche e foto dei ceppi, materiali usati, problemi segnalati</div></div><input type="checkbox" name="acts"></label>` : ''}
     <label class="toggle-row"><div class="grow">Foto<div class="sub">numerate, con la descrizione sotto; il file pesa di più</div></div><input type="checkbox" name="photos" checked></label></div>
     <div class="fmt-row">${fmtSeg('pdf', 'PDF', 'da conservare e mandare')}${fmtSeg('docx', 'Word', 'da modificare')}${fmtSeg('xlsx', 'Excel', '<span class="xl-sub">una riga per voce</span>')}</div>
@@ -14957,7 +15078,7 @@ root.addEventListener('click', (e) => {
     case 'diary-period': case 'diary-filter': diaryFilterSheet(); break;
     case 'diary-alldays': S.diaryAllDays = !!el.dataset.v; render(); break;
     case 'diary-clear': S.diaryProj = ''; S.diaryFrom = ''; S.diaryTo = ''; render(); break;
-    case 'diary-people': diaryPeopleSheet(); break;
+    case 'diary-force': diaryForceSheet(); break;
     case 'diary-photo': journalForm(null, null, { ai: true }); break;
     case 'diary-mine': S.diaryWho = null; S.diaryProj = ''; S.diaryFrom = ''; S.diaryTo = ''; S.diaryQ = ''; S.diaryView = S.diaryFromShare ? 'condivisi' : 'home'; window.scrollTo(0, 0); render(); break;
     case 'share-new': shareForm(); break;
@@ -15137,6 +15258,7 @@ root.addEventListener('click', (e) => {
     case 'task-snooze': snoozeTask(id); break;
     case 'strain-snooze': snoozeStrain(id); break;
     case 'stock-snooze': snoozeStock(id); break;
+    case 'todo-tab': S.todoTab = el.dataset.v; window.scrollTo(0, 0); render(); break;
     case 'issue-filter': S.issueFilter = el.dataset.v; render(); break;
     case 'new-task': taskForm(); break;
     case 'open-task': openTask(id); break;
@@ -15222,6 +15344,9 @@ root.addEventListener('change', (e) => {
     savePrefs(mf.dataset.mf === 'ref' ? { micoRef: v || null } : { micoProj: v || null }).then(render);
     return;
   }
+  // giro 52: di chi vedere le cose da fare in Personali
+  const tw = e.target.closest?.('select[data-todo-who]');
+  if (tw) { S.todoWho = tw.value; render(); return; }
   if (e.target.id === 'pickday' && e.target.value) {
     S.bookDay = e.target.value;
     loadDay(S.bookDay).catch((x) => toast(x.message));
@@ -15248,7 +15373,7 @@ addEventListener('appinstalled', () => { S.installEvt = null; if (S.uid) { rende
 // ===========================================================================
 //  Avvio
 // ===========================================================================
-const APP_BUILD = '2026-10-14b';
+const APP_BUILD = '2026-10-14e';
 function updateReady() {
   if (S.updateReady) return;
   S.updateReady = true;

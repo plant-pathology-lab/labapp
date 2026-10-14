@@ -415,7 +415,8 @@ async function practicalReminders(admin: any, force = false) {
 
 // Nuovi problemi segnalati
 // deno-lint-ignore no-explicit-any
-// Diario mandato a un collega: avvisa solo chi lo riceve
+// Diario mandato a un collega: avvisa solo chi lo riceve. Giro 54: l'accesso d'emergenza dello sviluppatore
+// avvisa invece chi scrive il diario
 // deno-lint-ignore no-explicit-any
 async function newShares(admin: any, subs: Sub[]) {
   const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
@@ -423,14 +424,24 @@ async function newShares(admin: any, subs: Sub[]) {
     .update({ notified_at: new Date().toISOString() })
     .is('notified_at', null)
     .gte('created_at', since)
-    .select('id, owner_id, viewer_id, project_id, from_day, to_day, entry_ids, note');
+    .select('id, owner_id, viewer_id, project_id, from_day, to_day, entry_ids, note, forced');
   if (error) return 0;  // database non ancora aggiornato
   if (!shares?.length) return 0;
-  const who = await names(admin, shares.map((s: { owner_id: string }) => s.owner_id));
+  const who = await names(admin, shares.flatMap((s: { owner_id: string; viewer_id: string }) => [s.owner_id, s.viewer_id]));
   const pids = [...new Set(shares.map((s: { project_id: string | null }) => s.project_id).filter(Boolean))];
   const { data: projects } = pids.length ? await admin.from('lab_projects').select('id, name').in('id', pids) : { data: [] };
   let sent = 0;
   for (const s of shares) {
+    if (s.forced) {
+      const r = await deliver(admin, subs.filter((x) => x.user_id === s.owner_id), {
+        title: `${who[s.viewer_id] ?? 'Lo sviluppatore'} ha aperto il tuo diario`,
+        body: ['Accesso d\'emergenza', s.note].filter(Boolean).join(' · '),
+        url: './#diario',
+        tag: `share-${s.id}`,
+      });
+      sent += r.sent;
+      continue;
+    }
     const what = s.entry_ids?.length ? (s.entry_ids.length === 1 ? 'una pagina' : `${s.entry_ids.length} pagine`)
       : s.project_id ? `il progetto ${projects?.find((p: { id: string }) => p.id === s.project_id)?.name ?? ''}`.trim()
       : s.from_day || s.to_day ? 'alcuni giorni' : 'tutto il diario';

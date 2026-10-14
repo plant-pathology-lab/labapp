@@ -18,6 +18,10 @@ create table if not exists public.profiles (
   role        text not null default 'pending' check (role in ('pending', 'member', 'admin')),
   created_at  timestamptz not null default now()
 );
+-- giro 54: lo sviluppatore (il primo che si è registrato) gestisce gli accessi; chi lascia il laboratorio
+-- torna "in attesa" con la data di uscita, così i suoi dati (diario compreso) restano
+alter table public.profiles add column if not exists developer boolean not null default false;
+alter table public.profiles add column if not exists left_at timestamptz;
 
 create or replace function public.handle_new_user()
 returns trigger
@@ -26,12 +30,13 @@ security definer
 set search_path = ''
 as $$
 begin
-  insert into public.profiles (id, full_name, email, role)
+  insert into public.profiles (id, full_name, email, role, developer)
   values (
     new.id,
     coalesce(nullif(trim(new.raw_user_meta_data ->> 'full_name'), ''), split_part(new.email, '@', 1)),
     new.email,
-    case when exists (select 1 from public.profiles where role = 'admin') then 'pending' else 'admin' end
+    case when exists (select 1 from public.profiles where role = 'admin') then 'pending' else 'admin' end,
+    not exists (select 1 from public.profiles where role = 'admin' or developer)
   );
   return new;
 end;
@@ -67,7 +72,22 @@ as $$
   );
 $$;
 
--- Approva, promuove o declassa un utente (solo amministratori).
+-- giro 54: lo sviluppatore dell'app, l'unico che gestisce gli accessi
+create or replace function public.is_developer()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.profiles
+    where id = auth.uid() and developer and role = 'admin'
+  );
+$$;
+
+-- Approva, promuove o declassa un utente (giro 54: solo lo sviluppatore). Rimettere "in attesa" chi era membro
+-- vuol dire togliergli l'accesso: i suoi dati restano e si segna quando è uscito
 create or replace function public.set_member_role(target uuid, new_role text)
 returns void
 language plpgsql
@@ -75,18 +95,24 @@ security definer
 set search_path = ''
 as $$
 begin
-  if not public.is_admin() then
-    raise exception 'Solo un amministratore può cambiare i ruoli';
+  if not public.is_developer() then
+    raise exception 'Gli accessi li gestisce solo lo sviluppatore dell''app';
   end if;
   if new_role not in ('pending', 'member', 'admin') then
     raise exception 'Ruolo non valido';
+  end if;
+  if target = auth.uid() and new_role <> 'admin' then
+    raise exception 'Lo sviluppatore resta amministratore';
   end if;
   if new_role <> 'admin'
      and exists (select 1 from public.profiles where id = target and role = 'admin')
      and (select count(*) from public.profiles where role = 'admin') = 1 then
     raise exception 'Serve almeno un amministratore';
   end if;
-  update public.profiles set role = new_role where id = target;
+  update public.profiles
+     set left_at = case when new_role <> 'pending' then null when role <> 'pending' then now() else left_at end,
+         role = new_role
+   where id = target;
 end;
 $$;
 
@@ -98,8 +124,8 @@ security definer
 set search_path = ''
 as $$
 begin
-  if not public.is_admin() then
-    raise exception 'Solo un amministratore può rimuovere un utente';
+  if not public.is_developer() then
+    raise exception 'Gli accessi li gestisce solo lo sviluppatore dell''app';
   end if;
   if target = auth.uid() then
     raise exception 'Non puoi rimuovere te stesso';
@@ -1300,6 +1326,8 @@ create table if not exists public.journal_shares (
   constraint condivisione_pagine check (entry_ids is null or cardinality(entry_ids) between 1 and 1000)
 );
 create index if not exists journal_shares_viewer on public.journal_shares (viewer_id, owner_id);
+-- giro 54: accesso d'emergenza dello sviluppatore a un diario; chi lo scrive lo vede e non lo può togliere
+alter table public.journal_shares add column if not exists forced boolean not null default false;
 create index if not exists journal_shares_owner on public.journal_shares (owner_id);
 
 create or replace function public.journal_shared(p_owner uuid, p_project uuid, p_day date, p_id uuid)
@@ -1317,6 +1345,42 @@ as $$
        and (s.to_day is null or p_day <= s.to_day)
        and (s.entry_ids is null or p_id = any (s.entry_ids))
   );
+$$;
+
+-- giro 54: lo sviluppatore apre il diario di qualcuno quando va recuperato. Resta scritto, con il motivo,
+-- fra le condivisioni di chi lo scrive, che lo vede
+create or replace function public.force_diary_access(target uuid, reason text)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  sid uuid;
+  why text := left(btrim(coalesce(reason, '')), 500);
+begin
+  if not public.is_developer() then
+    raise exception 'L''accesso d''emergenza ai diari ce l''ha solo lo sviluppatore dell''app';
+  end if;
+  if target = auth.uid() then
+    raise exception 'È il tuo diario';
+  end if;
+  if char_length(why) < 5 then
+    raise exception 'Scrivi il motivo';
+  end if;
+  if not exists (select 1 from public.profiles where id = target) then
+    raise exception 'Persona non trovata';
+  end if;
+  select id into sid from public.journal_shares where owner_id = target and viewer_id = auth.uid() and forced limit 1;
+  if sid is not null then
+    update public.journal_shares set note = why, created_at = now(), notified_at = null where id = sid;
+    return sid;
+  end if;
+  insert into public.journal_shares (owner_id, viewer_id, include_runs, note, forced)
+  values (target, auth.uid(), true, why, true)
+  returning id into sid;
+  return sid;
+end;
 $$;
 
 -- Copie di sicurezza: ogni notte il database copia tutte le tabelle qui dentro (il piano gratuito di Supabase
@@ -1346,8 +1410,8 @@ declare
   r jsonb;
   new_id bigint;
 begin
-  if auth.uid() is not null and not public.is_admin() then
-    raise exception 'Solo un amministratore fa le copie';
+  if auth.uid() is not null and not public.is_developer() then
+    raise exception 'Le copie le fa solo lo sviluppatore dell''app';
   end if;
   for t in
     select table_name::text from information_schema.tables
@@ -1389,8 +1453,8 @@ as $$
 declare
   t text;
 begin
-  if not public.is_admin() then
-    raise exception 'Solo un amministratore guarda le copie';
+  if not public.is_developer() then
+    raise exception 'Le copie le guarda solo lo sviluppatore dell''app';
   end if;
   foreach t in array array['items', 'strains', 'protocols', 'protocol_runs', 'lab_journal', 'lab_projects', 'instruments', 'tasks', 'issues',
                            'cylinders', 'flowcells', 'freezers', 'boxes', 'practicals', 'funds', 'lc_columns', 'waste_containers', 'order_requests', 'lab_docs'] loop
@@ -1418,8 +1482,8 @@ declare
   fk record;
   kids text[];
 begin
-  if not public.is_admin() then
-    raise exception 'Solo un amministratore recupera dalle copie';
+  if not public.is_developer() then
+    raise exception 'Dalle copie recupera solo lo sviluppatore dell''app';
   end if;
   if p_ids is null or cardinality(p_ids) = 0 then return 0; end if;
   if p_table in ('backups', 'push_subscriptions', 'ai_usage', 'profiles') or to_regclass('public.' || p_table) is null then
@@ -2032,7 +2096,7 @@ revoke all on function public.save_practical(jsonb) from public, anon;
 grant execute on function public.save_practical(jsonb) to authenticated;
 
 -- ---------------------------------------------------------------------
---  Caffè: chi ha comprato le cialde, a punti (1 punto = 50 cialde)
+--  Caffè: chi ha comprato le cialde, a punti (1 punto = una spunta della lavagna = 150 cialde)
 -- ---------------------------------------------------------------------
 create table if not exists public.coffee_orders (
   id          uuid primary key default gen_random_uuid(),
@@ -2377,7 +2441,7 @@ on conflict (id) do nothing;
 drop policy if exists "foto: viste dai membri" on storage.objects;
 create policy "foto: viste dai membri" on storage.objects
   for select to authenticated using (bucket_id = 'foto' and public.is_member() and (
-    objects.name not like 'diario/%' or objects.owner = auth.uid() or public.is_admin()
+    objects.name not like 'diario/%' or objects.owner = auth.uid()
     or exists (select 1 from public.lab_journal j where objects.name = any (j.photos))));
 drop policy if exists "foto: caricate dai membri" on storage.objects;
 create policy "foto: caricate dai membri" on storage.objects
@@ -2787,9 +2851,11 @@ drop policy if exists "esecuzioni: cancella chi le ha fatte" on public.protocol_
 create policy "esecuzioni: cancella chi le ha fatte" on public.protocol_runs
   for delete to authenticated using (public.is_member() and (created_by = auth.uid() or public.is_admin()));
 
+-- giro 54: il diario lo leggono solo chi lo scrive e chi lo riceve con Manda (o con l'accesso d'emergenza)
 drop policy if exists "diario: lo legge chi lo scrive e l'amministratore" on public.lab_journal;
-create policy "diario: lo legge chi lo scrive e l'amministratore" on public.lab_journal
-  for select to authenticated using (public.is_member() and (user_id = auth.uid() or public.is_admin() or public.journal_shared(user_id, project_id, day, id)));
+drop policy if exists "diario: lo legge chi lo scrive e chi lo riceve" on public.lab_journal;
+create policy "diario: lo legge chi lo scrive e chi lo riceve" on public.lab_journal
+  for select to authenticated using (public.is_member() and (user_id = auth.uid() or public.journal_shared(user_id, project_id, day, id)));
 drop policy if exists "diario: a proprio nome" on public.lab_journal;
 create policy "diario: a proprio nome" on public.lab_journal
   for insert to authenticated with check (public.is_member() and user_id = auth.uid());
@@ -2800,27 +2866,32 @@ drop policy if exists "diario: cancella solo chi lo scrive" on public.lab_journa
 create policy "diario: cancella solo chi lo scrive" on public.lab_journal
   for delete to authenticated using (public.is_member() and user_id = auth.uid() and signed_at is null);
 drop policy if exists "diario: versioni di chi lo scrive e dell'amministratore" on public.lab_journal_versions;
-create policy "diario: versioni di chi lo scrive e dell'amministratore" on public.lab_journal_versions
-  for select to authenticated using (public.is_member() and exists (select 1 from public.lab_journal j where j.id = entry_id and (j.user_id = auth.uid() or public.is_admin())));
+drop policy if exists "diario: versioni di chi lo scrive" on public.lab_journal_versions;
+create policy "diario: versioni di chi lo scrive" on public.lab_journal_versions
+  for select to authenticated using (public.is_member() and exists (select 1 from public.lab_journal j where j.id = entry_id and j.user_id = auth.uid()));
 drop policy if exists "condivisioni: le vede chi manda, chi riceve e l'amministratore" on public.journal_shares;
-create policy "condivisioni: le vede chi manda, chi riceve e l'amministratore" on public.journal_shares
-  for select to authenticated using (public.is_member() and (owner_id = auth.uid() or viewer_id = auth.uid() or public.is_admin()));
+drop policy if exists "condivisioni: le vedono chi manda e chi riceve" on public.journal_shares;
+create policy "condivisioni: le vedono chi manda e chi riceve" on public.journal_shares
+  for select to authenticated using (public.is_member() and (owner_id = auth.uid() or viewer_id = auth.uid()));
 drop policy if exists "condivisioni: il proprio diario a un collega" on public.journal_shares;
 create policy "condivisioni: il proprio diario a un collega" on public.journal_shares
   for insert to authenticated with check (public.is_member() and owner_id = auth.uid()
     and exists (select 1 from public.profiles p where p.id = viewer_id and p.role in ('member', 'admin')));
 drop policy if exists "condivisioni: le cambia chi le ha mandate" on public.journal_shares;
 create policy "condivisioni: le cambia chi le ha mandate" on public.journal_shares
-  for update to authenticated using (public.is_member() and owner_id = auth.uid()) with check (public.is_member() and owner_id = auth.uid());
+  for update to authenticated using (public.is_member() and owner_id = auth.uid() and not forced) with check (public.is_member() and owner_id = auth.uid() and not forced);
 drop policy if exists "condivisioni: le toglie chi manda o chi riceve" on public.journal_shares;
 create policy "condivisioni: le toglie chi manda o chi riceve" on public.journal_shares
-  for delete to authenticated using (public.is_member() and (owner_id = auth.uid() or viewer_id = auth.uid() or public.is_admin()));
+  for delete to authenticated using (public.is_member() and ((owner_id = auth.uid() and not forced) or viewer_id = auth.uid()));
+-- giro 54: nelle copie c'è tutto, diari e fondi compresi: solo lo sviluppatore
 drop policy if exists "copie: solo l'amministratore" on public.backups;
-create policy "copie: solo l'amministratore" on public.backups
-  for select to authenticated using (public.is_admin());
+drop policy if exists "copie: solo lo sviluppatore" on public.backups;
+create policy "copie: solo lo sviluppatore" on public.backups
+  for select to authenticated using (public.is_developer());
 drop policy if exists "copie: le cancella l'amministratore" on public.backups;
-create policy "copie: le cancella l'amministratore" on public.backups
-  for delete to authenticated using (public.is_admin());
+drop policy if exists "copie: le cancella lo sviluppatore" on public.backups;
+create policy "copie: le cancella lo sviluppatore" on public.backups
+  for delete to authenticated using (public.is_developer());
 drop policy if exists "AI: ognuno vede le sue pagine lette" on public.ai_usage;
 create policy "AI: ognuno vede le sue pagine lette" on public.ai_usage
   for select to authenticated using (public.is_member() and (user_id = auth.uid() or public.is_admin()));
@@ -3109,6 +3180,10 @@ revoke execute on function public.strain_events_sync() from public, anon, authen
 revoke execute on function public.lab_journal_before_update() from public, anon, authenticated;
 revoke execute on function public.journal_shared(uuid, uuid, date, uuid) from public, anon;
 grant execute on function public.journal_shared(uuid, uuid, date, uuid) to authenticated;
+revoke execute on function public.is_developer() from public, anon;
+grant execute on function public.is_developer() to authenticated;
+revoke execute on function public.force_diary_access(uuid, text) from public, anon;
+grant execute on function public.force_diary_access(uuid, text) to authenticated;
 revoke execute on function public.make_backup(text) from public, anon;
 grant execute on function public.make_backup(text) to authenticated;
 revoke execute on function public.backup_missing(bigint) from public, anon;
