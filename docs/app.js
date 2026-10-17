@@ -132,6 +132,7 @@ const I = {
 // simboli delle ricerche del laboratorio, disegnati in un quadrato 48x48
 const GLY = {"chrom":"<path d=\"M3 41 H45\" /><path d=\"M5 41 C8 41 9 31 12 31 C15 31 15 41 18 41 C21 41 22 7 25 7 C28 7 29 41 32 41 C35 41 36 23 38.5 23 C41 23 41.5 41 44 41\" />","voc":"<path d=\"M5 43 C9 40 13 46 17 43 C21 40 25 46 29 43\" /><circle cx=\"14\" cy=\"31\" r=\"3.6\" /><circle cx=\"25\" cy=\"21\" r=\"4.6\" /><circle cx=\"37\" cy=\"9.5\" r=\"5.6\" />","barcode":"<g stroke=\"none\" fill=\"currentColor\"><rect x=\"5\" y=\"8\" width=\"2.6\" height=\"32\" rx=\"1\"/><rect x=\"10\" y=\"8\" width=\"5\" height=\"32\" rx=\"1\"/><rect x=\"17.5\" y=\"8\" width=\"2.6\" height=\"32\" rx=\"1\"/><rect x=\"22.5\" y=\"8\" width=\"2.6\" height=\"32\" rx=\"1\"/><rect x=\"27.5\" y=\"8\" width=\"6\" height=\"32\" rx=\"1\"/><rect x=\"36\" y=\"8\" width=\"2.6\" height=\"32\" rx=\"1\"/><rect x=\"41\" y=\"8\" width=\"3.4\" height=\"32\" rx=\"1\"/></g><path d=\"M5 44.5 H44.5\" />","toxin":"<path d=\"M15.5 14 L24.2 19 V29 L15.5 34 L6.8 29 V19 Z\" /><path d=\"M24.2 19 L32.9 14 L41.6 19 V29 L32.9 34 L24.2 29\" /><path d=\"M32.9 14 V6\" /><path d=\"M41.6 29 L46 31.5\" /><path d=\"M10.5 21.5 V26.5\" />","tricho":"<path d=\"M24 45 V12\" /><path d=\"M24 33 L14 25\" /><path d=\"M24 33 L34 25\" /><path d=\"M24 22 L17 15\" /><path d=\"M24 22 L31 15\" /><g stroke=\"none\" fill=\"currentColor\"><circle cx=\"24\" cy=\"8.5\" r=\"4.2\"/><circle cx=\"12\" cy=\"23\" r=\"3.6\"/><circle cx=\"36\" cy=\"23\" r=\"3.6\"/><circle cx=\"15\" cy=\"12.6\" r=\"3.2\"/><circle cx=\"33\" cy=\"12.6\" r=\"3.2\"/></g>","protein":"<path d=\"M4 33 C4 13 17 13 15 28 C13 41 26 41 25 25 C24 11 37 11 35 26 C33 39 44 37 44 21\" /><path d=\"M38 9 L44 15 L44 21\" />","wheat":"<path d=\"M24 46 V18\" /><g stroke=\"none\" fill=\"currentColor\"><ellipse cx=\"19.4\" cy=\"33\" rx=\"3.1\" ry=\"5.6\" transform=\"rotate(-28 19.4 33)\"/><ellipse cx=\"28.6\" cy=\"33\" rx=\"3.1\" ry=\"5.6\" transform=\"rotate(28 28.6 33)\"/><ellipse cx=\"19.4\" cy=\"24\" rx=\"3.1\" ry=\"5.6\" transform=\"rotate(-28 19.4 24)\"/><ellipse cx=\"28.6\" cy=\"24\" rx=\"3.1\" ry=\"5.6\" transform=\"rotate(28 28.6 24)\"/><ellipse cx=\"19.8\" cy=\"15\" rx=\"2.9\" ry=\"5.2\" transform=\"rotate(-24 19.8 15)\"/><ellipse cx=\"28.2\" cy=\"15\" rx=\"2.9\" ry=\"5.2\" transform=\"rotate(24 28.2 15)\"/><ellipse cx=\"24\" cy=\"8.5\" rx=\"2.7\" ry=\"4.8\"/></g><path d=\"M17 11 L13 3\" stroke-width=\"1.6\"/><path d=\"M31 11 L35 3\" stroke-width=\"1.6\"/>","tomato":"<circle cx=\"24\" cy=\"28.5\" r=\"15.5\" /><path d=\"M24 13 V6\" /><path d=\"M24 14.5 L17 11 M24 14.5 L31 11 M24 14.5 L19 19 M24 14.5 L29 19\" stroke-width=\"2.4\"/>","potato":"<path d=\"M9 30 C5 20 13 9 25 10 C37 11 45 18 42 28 C39 38 30 41 22 40 C15 39.5 11 36 9 30 Z\" /><g stroke=\"none\" fill=\"currentColor\"><circle cx=\"18\" cy=\"22\" r=\"1.9\"/><circle cx=\"30\" cy=\"19\" r=\"1.9\"/><circle cx=\"27\" cy=\"31\" r=\"1.9\"/><circle cx=\"35\" cy=\"28\" r=\"1.5\"/></g>","column":"<path d=\"M8 10 H40\" /><path d=\"M11 10 C8 10 7 14 10 15 C12 16 13 13 11 12.5\" stroke-width=\"2\"/><path d=\"M37 10 C40 10 41 14 38 15 C36 16 35 13 37 12.5\" stroke-width=\"2\"/><path d=\"M14 15 H34\" /><path d=\"M16 15 V38 M21.3 15 V38 M26.7 15 V38 M32 15 V38\" stroke-width=\"2.4\"/><path d=\"M12 38 H36\" /><path d=\"M9 43 H39\" />","conidio":"<path d=\"M42.5 10.1 L41.4 11.9 L40.7 13.7 L39.9 15.3 L39.0 16.9 L38.1 18.3 L37.1 19.7 L36.2 21.1 L35.1 22.4 L34.0 23.5 L32.8 24.6 L31.5 25.6 L30.2 26.6 L28.9 27.4 L27.5 28.2 L26.0 28.8 L24.5 29.4 L23.0 29.8 L21.4 30.2 L19.8 30.4 L18.2 30.6 L16.6 30.6 L14.9 30.6 L13.2 30.4 L11.5 30.2 L9.8 29.8 L8.4 28.7 L6.7 28.2 L4.0 28.9 L4.0 28.9 L4.7 31.1 L6.2 32.7 L7.8 34.0 L9.7 35.2 L11.6 36.1 L13.7 36.8 L15.8 37.4 L18.0 37.7 L20.2 37.8 L22.4 37.8 L24.6 37.5 L26.8 37.0 L28.9 36.3 L31.0 35.4 L33.0 34.3 L34.8 33.1 L36.6 31.6 L38.2 30.1 L39.6 28.4 L40.8 26.6 L41.9 24.6 L42.8 22.6 L43.5 20.5 L43.8 18.4 L44.0 16.3 L43.9 14.1 L43.6 12.1 L42.5 10.1 Z\" /><path d=\"M38.0 19.4 L42.8 21.7 M31.7 26.3 L35.9 31.6 M23.5 30.3 L25.0 36.9 M14.2 31.0 L13.0 36.2\" stroke-width=\"2.2\"/>","clip":"<rect x=\"10\" y=\"8\" width=\"28\" height=\"36\" rx=\"4\"/><path d=\"M18 8 V5 H30 V8\"/><path d=\"M15.5 20 L18.5 23 L23 17.5 M27 20.5 H33 M15.5 32 L18.5 35 L23 29.5 M27 32.5 H33\" stroke-width=\"2.6\"/>"};
 const gicon = (k, cls = '') => `<svg class="i g ${cls}" viewBox="0 0 48 48" aria-hidden="true">${GLY[k] || ''}</svg>`;
+GLY.problema = '<path d="M24 6 L44.5 41.5 H3.5 Z" stroke-linejoin="round"/><path d="M24 18.5 V29" stroke-width="3.4"/><circle cx="24" cy="35" r="2.1" stroke="none" fill="currentColor"/>';
 // segni delle app della Home, stile pieno (giro 19): un oggetto solo, forme piene, vuoti larghi, bianchi sul colore della sezione
 Object.assign(GLY, {
   tesi: '<path fill="currentColor" stroke="none" d="M24 7 L46 16.5 L24 26 L2 16.5 Z"/><path fill="currentColor" stroke="none" d="M12.5 23 L24 28.2 L35.5 23 V32 Q35.5 38.5 24 38.5 Q12.5 38.5 12.5 32 Z"/><path d="M41.5 18.2 V31" stroke-width="2.6" fill="none"/><path fill="currentColor" stroke="none" d="M39.3 30 H43.7 L44.6 38 H38.4 Z"/>',
@@ -921,7 +922,7 @@ function renderSeqHome(list) {
 const appGlyph = (sp) => `<span class="h1-ic app-glyph">${gicon(SPACES[sp].glyph)}</span>`;
 // ---- Home: le grandi app del laboratorio; il resto (tipologie, posti, congelatori, bombole) sta dentro Inventario
 const INV_KIDS = new Set(['tutto', 'scadenza', 'congelatori', 'bombole', ...CATS.map((c) => c.id).filter((c) => c !== 'campioni')]);
-const APP_COL = { primer: 'var(--app-primer)', sicurezza: 'var(--app-sicurezza)', inventario: 'var(--primary-home)', prenota: 'var(--app-prenota)', micoteca: 'var(--cat-ceppi)', campioni: 'var(--app-campioni)', seq: 'var(--cat-seq)', protocolli: 'var(--space-proto)', diario: 'var(--app-diario)', documenti: 'var(--app-docs)', caffe: 'var(--cat-caffe)', tesisti: 'var(--app-tesi)' };
+const APP_COL = { primer: 'var(--app-primer)', sicurezza: 'var(--app-sicurezza)', inventario: 'var(--primary-home)', prenota: 'var(--app-prenota)', micoteca: 'var(--cat-ceppi)', campioni: 'var(--app-campioni)', seq: 'var(--cat-seq)', protocolli: 'var(--space-proto)', diario: 'var(--app-diario)', documenti: 'var(--app-docs)', caffe: 'var(--cat-caffe)', tesisti: 'var(--app-tesi)', problemi: 'var(--warn)' };
 function appsHtml(hid) {
   const n = (k, one, many) => `${k} ${k === 1 ? one : many}`;
   const app = (id, glyph, name, attrs, sub, alert, cls = '') => `<button type="button" class="app tile ${cls}" ${attrs} data-app="${id}" style="--a:${APP_COL[id]}"><span class="app-ic">${gicon(glyph)}</span>
@@ -947,6 +948,12 @@ function appsHtml(hid) {
   if (!hid.has('sicurezza')) {
     const st = safetyStats(), nc = storageConflicts().length;
     out.push(app('sicurezza', 'sicurezza', 'Sicurezza', 'data-act="cat" data-cat="sicurezza"', st.cmr || st.vtox ? [st.cmr && n(st.cmr, 'CMR', 'CMR'), st.vtox && n(st.vtox, 'molto tossico', 'molto tossici')].filter(Boolean).join(', ') : 'DPI e prodotti pericolosi', nc ? n(nc, 'prodotto da separare', 'prodotti da separare') : ''));
+  }
+  // giro 55: i problemi segnalati hanno il loro riquadro, così si ritrovano subito
+  if (!hid.has('problemi')) {
+    const op = openIssues().filter((i) => !isIncident(i)), urg = op.filter((i) => i.urgency === 'alta').length, inc = openIssues().filter(isIncident).length;
+    out.push(app('problemi', 'problema', 'Problemi', 'data-act="cat" data-cat="problemi"', op.length ? n(op.length, 'aperto', 'aperti') : 'guasti e incidenti',
+      [urg && n(urg, 'urgente', 'urgenti'), inc && n(inc, 'incidente da verificare', 'incidenti da verificare')].filter(Boolean).join(', ')));
   }
   if (!hid.has('tesisti')) {
     const st = S.students || [], cur = st.filter((x) => x.status === 'in_corso').length, mine = st.filter((x) => x.status === 'in_corso' && stuMine(x)).length;
@@ -10504,7 +10511,7 @@ const prefs = () => S.me?.prefs || {};
 const favs = () => prefs().favorites || [];
 const isFav = (t, id) => favs().some((f) => f.t === t && f.id === id);
 const hiddenTiles = () => prefs().hidden || [];
-const HOME_SECTIONS = [['ceppi', 'Micoteca'], ['campioni', 'Campioni'], ['seq', 'Sequenziamento'], ['primer', 'Primer'], ['diario', 'Diario'], ['documenti', 'Pubblicazioni'], ['sicurezza', 'Sicurezza'], ['tesisti', 'Tesisti'], ['caffe', 'Caffè'], ['congelatori', 'Congelatori, dentro Inventario'], ['bombole', 'Bombole, dentro Inventario']];
+const HOME_SECTIONS = [['ceppi', 'Micoteca'], ['campioni', 'Campioni'], ['seq', 'Sequenziamento'], ['primer', 'Primer'], ['diario', 'Diario'], ['documenti', 'Pubblicazioni'], ['sicurezza', 'Sicurezza'], ['problemi', 'Problemi'], ['tesisti', 'Tesisti'], ['caffe', 'Caffè'], ['congelatori', 'Congelatori, dentro Inventario'], ['bombole', 'Bombole, dentro Inventario']];
 const TAB_LABELS = { inventario: 'Home', riordino: 'Ordini', prenota: 'Prenota', dafare: 'Da fare', protocolli: 'Protocolli', altro: 'Altro' };
 
 function applyTheme() {
@@ -10703,8 +10710,10 @@ S.funds = null;
 S.fundsUntil = 0;
 const FUNDS_UNLOCK_MS = 10 * 60e3;
 const PASSKEY_KEY = 'labapp-passkey-v1';
-const myFundIds = () => [...new Set((S.fundRoles || []).filter((m) => m.user_id === S.uid).map((m) => m.fund_id))];
-const showFunds = () => myFundIds().length > 0 || isAdmin();
+// giro 55: Fondi nascosti, il laboratorio non li usa. I dati restano: per riaccenderli FUNDS_ON = true
+const FUNDS_ON = false;
+const myFundIds = () => (FUNDS_ON ? [...new Set((S.fundRoles || []).filter((m) => m.user_id === S.uid).map((m) => m.fund_id))] : []);
+const showFunds = () => FUNDS_ON && (myFundIds().length > 0 || isAdmin());
 const toB64u = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const fromB64u = (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (s.length % 4)) % 4)), (c) => c.charCodeAt(0));
 
@@ -15063,7 +15072,7 @@ root.addEventListener('click', (e) => {
       // Home toccata di nuovo mentre c'è una ricerca: si torna ai riquadri (giro 23)
       else if (el.dataset.tab === 'inventario' && S.tab === 'inventario' && S.q) { S.q = ''; window.scrollTo(0, 0); render(); }
       else if (el.dataset.tab === 'protocolli' && S.tab === 'protocolli' && S.pcat) leavePcat(); else setTab(el.dataset.tab); break;
-    case 'cat': if (el.dataset.from) S.tab = 'inventario'; if (el.dataset.space === 'micoteca') S.mico = 'home'; if (el.dataset.space === 'seq') S.seq = 'home'; if (el.dataset.cat === 'diario') S.diaryView = 'home'; if (el.dataset.cat === 'campioni') { S.smpType = ''; S.smpSub = ''; S.smpProj = ''; S.q = ''; } if (el.dataset.cat === 'documenti' && !el.dataset.v) { S.docKind = 'paper'; S.docOther = ''; } if (el.dataset.cat === 'caffe') S.coffeeSub = 'turno'; if (el.dataset.cat === 'tesisti') { S.stuSub = 'triennale'; S.stuQ = ''; } if (el.dataset.cat === 'sicurezza') S.secSub = el.dataset.v || 'home'; if (el.dataset.cat === 'primer') S.primerSub = el.dataset.v || 'home'; if (el.dataset.cat === 'diario' && S.diaryWho) { S.diaryWho = null; S.diaryProj = ''; S.diaryFrom = ''; S.diaryTo = ''; } openCat(el.dataset.cat, el.dataset.from || null); break;
+    case 'cat': if (el.dataset.from) S.tab = 'inventario'; if (el.dataset.space === 'micoteca') S.mico = 'home'; if (el.dataset.space === 'seq') S.seq = 'home'; if (el.dataset.cat === 'diario') S.diaryView = 'home'; if (el.dataset.cat === 'campioni') { S.smpType = ''; S.smpSub = ''; S.smpProj = ''; S.q = ''; } if (el.dataset.cat === 'documenti' && !el.dataset.v) { S.docKind = 'paper'; S.docOther = ''; } if (el.dataset.cat === 'caffe') S.coffeeSub = 'turno'; if (el.dataset.cat === 'tesisti') { S.stuSub = 'triennale'; S.stuQ = ''; } if (el.dataset.cat === 'problemi') { S.issueKind = 'problema'; S.issueFilter = 'aperti'; } if (el.dataset.cat === 'sicurezza') S.secSub = el.dataset.v || 'home'; if (el.dataset.cat === 'primer') S.primerSub = el.dataset.v || 'home'; if (el.dataset.cat === 'diario' && S.diaryWho) { S.diaryWho = null; S.diaryProj = ''; S.diaryFrom = ''; S.diaryTo = ''; } openCat(el.dataset.cat, el.dataset.from || null); break;
     case 'cat-swap': if (S.mico === 'home') S.mico = 'ceppi'; swapCat(el.dataset.cat); break;
     case 'home': goHome(); break;
     case 'smp-type': S.smpType = el.dataset.v; S.smpProj = ''; S.smpSub = ''; S.q = ''; S.smpF = ''; window.scrollTo(0, 0); render(); break;
@@ -15373,7 +15382,7 @@ addEventListener('appinstalled', () => { S.installEvt = null; if (S.uid) { rende
 // ===========================================================================
 //  Avvio
 // ===========================================================================
-const APP_BUILD = '2026-10-14f';
+const APP_BUILD = '2026-10-17';
 function updateReady() {
   if (S.updateReady) return;
   S.updateReady = true;
